@@ -1,3 +1,4 @@
+import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Platform, Ctx2D } from '../../types';
@@ -382,7 +383,7 @@ export const hauntedGraveyard: ArenaPack = {
 
   // ---- Ambient systems ----
   clouds: {
-    count: 4,
+    count: 0, // Clouds belong to the painted plate.
     color: 'rgba(40, 30, 60, 0.4)',
     minSize: 60,
     maxSize: 100,
@@ -436,6 +437,8 @@ export const hauntedGraveyard: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
+    const painted = drawPaintedBackdrop(ctx, 'haunted_graveyard');
+
     ctx.save();
 
     // Full moon — hangs high in the sky, casts a soft halo.
@@ -478,6 +481,8 @@ export const hauntedGraveyard: ArenaPack = {
       ctx.arc(sx as number, sy as number, sr as number, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    if (painted) { ctx.restore(); return; }
 
     // Dead tree silhouettes in background
     ctx.fillStyle = '#0A0515';

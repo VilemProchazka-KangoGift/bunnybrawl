@@ -1,0 +1,64 @@
+{
+  "assets": [
+    {
+      "bytes": 48516,
+      "sha256": "6356E2F18555441B4581EE7D5B30F2E294DA43858D0495E58475735BC06F58FC",
+      "file": "src/engine/arenas/assets/rooftops-painted.webp",
+      "arena": "rooftops"
+    },
+    {
+      "bytes": 59932,
+      "sha256": "6696972700BF6B43DD98B009FB942DFDB958BCE1B8E4CFDD429CFE2471315B12",
+      "file": "src/engine/arenas/assets/treetops-painted.webp",
+      "arena": "treetops"
+    },
+    {
+      "bytes": 65618,
+      "sha256": "9FA3FAD604E980DBA8D4717C27D6B80FE865D213B8384F5D1432484FB7B05F21",
+      "file": "src/engine/arenas/assets/waterfall-painted.webp",
+      "arena": "waterfall"
+    },
+    {
+      "bytes": 61584,
+      "sha256": "333AA0874C9FAF6C701CAC1307D10325B521C8DE4E8EFA6777AADB40645129BB",
+      "file": "src/engine/arenas/assets/volcano-painted.webp",
+      "arena": "volcano"
+    },
+    {
+      "bytes": 28420,
+      "sha256": "33637B9F3E911F93E48314AB8FC1202DA4A212098569FD0A969DE0424DDA15A3",
+      "file": "src/engine/arenas/assets/castle-painted.webp",
+      "arena": "castle"
+    },
+    {
+      "bytes": 97508,
+      "sha256": "D77596FD59E0882026336539E4F781E150D36193A13BA744EBD9CA4476D669C8",
+      "file": "src/engine/arenas/assets/haunted-graveyard-painted.webp",
+      "arena": "haunted-graveyard"
+    },
+    {
+      "bytes": 66288,
+      "sha256": "5B90E5512FCB69C990118BC07C48433948F567C3E12CBFB761A20B392AA42B74",
+      "file": "src/engine/arenas/assets/candy-land-painted.webp",
+      "arena": "candy-land"
+    },
+    {
+      "bytes": 48236,
+      "sha256": "4BE01D16423A33AEA16CD677299E5509EAAAF78A9A7D0AB15D76EC764A879687",
+      "file": "src/engine/arenas/assets/underwater-painted.webp",
+      "arena": "underwater"
+    },
+    {
+      "bytes": 94790,
+      "sha256": "C076599E5B376796921D99C8AD5AB537A619B75A15E2FB04FA3EE9C87CC2BFB7",
+      "file": "src/engine/arenas/assets/space-station-painted.webp",
+      "arena": "space-station"
+    }
+  ],
+  "excluded": [
+    "meadow",
+    "winter_lake"
+  ],
+  "approved": "2026-10-08",
+  "resolution": "1280x720"
+}

@@ -1,3 +1,4 @@
+import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
@@ -438,7 +439,7 @@ export const spaceStation: ArenaPack = {
 
   // ---- Ambient systems ----
   clouds: {
-    count: 0,
+    count: 0, // Clouds belong to the painted plate.
     color: 'rgba(20, 20, 40, 0.3)',
     minSize: 40,
     maxSize: 60,
@@ -544,6 +545,8 @@ export const spaceStation: ArenaPack = {
   },
 
   drawFarBackground: (ctx, _arena) => {
+    // The revised plate includes the station walls, central window and Earth.
+    if (drawPaintedBackdrop(ctx, 'space_station')) return;
     ctx.save();
 
     // === Hangar interior walls ===
@@ -584,70 +587,74 @@ export const spaceStation: ArenaPack = {
     ctx.fillStyle = '#020210';
     ctx.fillRect(280, 25, 720, 635);
 
-    // Stars through the opening
+    // Both painted and procedural space remain inside the hangar opening.
     ctx.save();
     ctx.beginPath();
     ctx.rect(280, 25, 720, 635);
     ctx.clip();
 
-    ctx.fillStyle = '#FFFFFF';
-    const stars = [
-      [320, 60, 1.5], [400, 100, 0.8], [480, 50, 1.2], [560, 120, 0.9],
-      [640, 40, 1.4], [720, 90, 0.7], [800, 60, 1.1], [880, 130, 0.8],
-      [960, 45, 1.3], [350, 180, 0.6], [500, 200, 1.0], [650, 170, 0.8],
-      [780, 220, 0.9], [900, 190, 0.7], [430, 280, 0.6], [580, 300, 1.0],
-      [700, 260, 0.8], [850, 310, 0.7], [380, 400, 0.5], [520, 380, 0.8],
-      [670, 420, 0.6], [820, 370, 0.9], [940, 450, 0.7],
-    ];
-    for (const [sx, sy, sr] of stars) {
-      ctx.globalAlpha = 0.3 + (sr as number) * 0.25;
+    {
+      // Stars through the opening
+      ctx.fillStyle = '#FFFFFF';
+      const stars = [
+        [320, 60, 1.5], [400, 100, 0.8], [480, 50, 1.2], [560, 120, 0.9],
+        [640, 40, 1.4], [720, 90, 0.7], [800, 60, 1.1], [880, 130, 0.8],
+        [960, 45, 1.3], [350, 180, 0.6], [500, 200, 1.0], [650, 170, 0.8],
+        [780, 220, 0.9], [900, 190, 0.7], [430, 280, 0.6], [580, 300, 1.0],
+        [700, 260, 0.8], [850, 310, 0.7], [380, 400, 0.5], [520, 380, 0.8],
+        [670, 420, 0.6], [820, 370, 0.9], [940, 450, 0.7],
+      ];
+      for (const [sx, sy, sr] of stars) {
+        ctx.globalAlpha = 0.3 + (sr as number) * 0.25;
+        ctx.beginPath();
+        ctx.arc(sx as number, sy as number, sr as number, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Nebula through the opening
+      ctx.globalAlpha = 0.1;
+      const neb = ctx.createRadialGradient(500, 200, 10, 500, 200, 180);
+      neb.addColorStop(0, '#4400FF');
+      neb.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = neb;
+      ctx.fillRect(320, 20, 360, 380);
+
+      // Large Earth visible through hangar doors
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = '#1A5AAA';
       ctx.beginPath();
-      ctx.arc(sx as number, sy as number, sr as number, 0, Math.PI * 2);
+      ctx.arc(750, 350, 140, 0, Math.PI * 2);
       ctx.fill();
+      // Continents
+      ctx.fillStyle = '#2A8A3A';
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.ellipse(710, 310, 45, 35, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(780, 370, 35, 50, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(690, 400, 25, 20, 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Ice caps
+      ctx.fillStyle = '#DDEEFF';
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.ellipse(750, 215, 50, 15, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(750, 485, 45, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Atmosphere glow
+      ctx.globalAlpha = 0.2;
+      const earthGlow = ctx.createRadialGradient(750, 350, 130, 750, 350, 180);
+      earthGlow.addColorStop(0, 'rgba(100, 180, 255, 0.3)');
+      earthGlow.addColorStop(1, 'rgba(100, 180, 255, 0)');
+      ctx.fillStyle = earthGlow;
+      ctx.fillRect(550, 150, 400, 400);
+
     }
-
-    // Nebula through the opening
-    ctx.globalAlpha = 0.1;
-    const neb = ctx.createRadialGradient(500, 200, 10, 500, 200, 180);
-    neb.addColorStop(0, '#4400FF');
-    neb.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = neb;
-    ctx.fillRect(320, 20, 360, 380);
-
-    // Large Earth visible through hangar doors
-    ctx.globalAlpha = 0.8;
-    ctx.fillStyle = '#1A5AAA';
-    ctx.beginPath();
-    ctx.arc(750, 350, 140, 0, Math.PI * 2);
-    ctx.fill();
-    // Continents
-    ctx.fillStyle = '#2A8A3A';
-    ctx.globalAlpha = 0.5;
-    ctx.beginPath();
-    ctx.ellipse(710, 310, 45, 35, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(780, 370, 35, 50, -0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(690, 400, 25, 20, 0.5, 0, Math.PI * 2);
-    ctx.fill();
-    // Ice caps
-    ctx.fillStyle = '#DDEEFF';
-    ctx.globalAlpha = 0.3;
-    ctx.beginPath();
-    ctx.ellipse(750, 215, 50, 15, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(750, 485, 45, 12, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Atmosphere glow
-    ctx.globalAlpha = 0.2;
-    const earthGlow = ctx.createRadialGradient(750, 350, 130, 750, 350, 180);
-    earthGlow.addColorStop(0, 'rgba(100, 180, 255, 0.3)');
-    earthGlow.addColorStop(1, 'rgba(100, 180, 255, 0)');
-    ctx.fillStyle = earthGlow;
-    ctx.fillRect(550, 150, 400, 400);
 
     ctx.restore(); // unclip
 

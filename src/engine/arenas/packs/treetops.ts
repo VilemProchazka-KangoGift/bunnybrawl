@@ -1,3 +1,4 @@
+import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
@@ -336,7 +337,7 @@ export const treetops: ArenaPack = {
 
   // ---- Ambient systems ----
   clouds: {
-    count: 0,
+    count: 0, // Clouds belong to the painted plate.
     color: 'rgba(100, 150, 100, 0.3)',
     minSize: 40,
     maxSize: 60,
@@ -391,6 +392,8 @@ export const treetops: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
+    if (drawPaintedBackdrop(ctx, 'treetops')) return;
+
     ctx.save();
 
     // Dense canopy above -- dappled light

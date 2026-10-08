@@ -1,3 +1,4 @@
+import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Platform, Ctx2D } from '../../types';
@@ -674,7 +675,7 @@ export const rooftops: ArenaPack = {
 
   // ---- Ambient systems ----
   clouds: {
-    count: 4,
+    count: 0, // Clouds belong to the painted plate.
     color: 'rgba(255, 150, 100, 0.35)',
     minSize: 55,
     maxSize: 90,
@@ -728,62 +729,67 @@ export const rooftops: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx, arena) => {
+    const painted = drawPaintedBackdrop(ctx, 'rooftops');
+
     ctx.save();
 
-    // Sunset glow
-    const sunGrd = ctx.createRadialGradient(250, 170, 10, 250, 170, 200);
-    sunGrd.addColorStop(0, 'rgba(255, 200, 80, 0.25)');
-    sunGrd.addColorStop(1, 'rgba(255, 150, 50, 0)');
-    ctx.fillStyle = sunGrd;
-    ctx.fillRect(50, 0, 400, 400);
+    if (!painted) {
+      // Sunset glow
+      const sunGrd = ctx.createRadialGradient(250, 170, 10, 250, 170, 200);
+      sunGrd.addColorStop(0, 'rgba(255, 200, 80, 0.25)');
+      sunGrd.addColorStop(1, 'rgba(255, 150, 50, 0)');
+      ctx.fillStyle = sunGrd;
+      ctx.fillRect(50, 0, 400, 400);
 
-    // === Background buildings -- distant city skyline ===
-    ctx.globalAlpha = 0.35;
-    const bgBuildings = [
-      // Left gap (0-80)
-      { x: -10, w: 45, top: 380, color: '#14101C' },
-      { x: 30, w: 55, top: 340, color: '#18121E' },
-      // Gap 1 (350-510)
-      { x: 355, w: 45, top: 360, color: '#14101C' },
-      { x: 390, w: 60, top: 310, color: '#100C18' },
-      { x: 440, w: 50, top: 380, color: '#18121E' },
-      // Gap 2 (810-970)
-      { x: 820, w: 50, top: 330, color: '#14101C' },
-      { x: 860, w: 65, top: 290, color: '#100C18' },
-      { x: 920, w: 45, top: 350, color: '#18121E' },
-      // Right gap (1200-1280)
-      { x: 1210, w: 50, top: 320, color: '#14101C' },
-      { x: 1250, w: 40, top: 370, color: '#18121E' },
-    ];
-    for (const bg of bgBuildings) {
-      ctx.fillStyle = bg.color;
-      ctx.fillRect(bg.x, bg.top, bg.w, 720 - bg.top);
-      // Tiny windows
-      ctx.fillStyle = '#FFCC55';
-      ctx.globalAlpha = 0.12;
-      for (let wy = bg.top + 15; wy < 700; wy += 18) {
-        for (let wx = bg.x + 5; wx < bg.x + bg.w - 5; wx += 12) {
-          if (Math.sin(wx * 1.3 + wy * 0.7) > 0) {
-            ctx.fillRect(wx, wy, 4, 5);
+      // === Background buildings -- distant city skyline ===
+      ctx.globalAlpha = 0.35;
+      const bgBuildings = [
+        // Left gap (0-80)
+        { x: -10, w: 45, top: 380, color: '#14101C' },
+        { x: 30, w: 55, top: 340, color: '#18121E' },
+        // Gap 1 (350-510)
+        { x: 355, w: 45, top: 360, color: '#14101C' },
+        { x: 390, w: 60, top: 310, color: '#100C18' },
+        { x: 440, w: 50, top: 380, color: '#18121E' },
+        // Gap 2 (810-970)
+        { x: 820, w: 50, top: 330, color: '#14101C' },
+        { x: 860, w: 65, top: 290, color: '#100C18' },
+        { x: 920, w: 45, top: 350, color: '#18121E' },
+        // Right gap (1200-1280)
+        { x: 1210, w: 50, top: 320, color: '#14101C' },
+        { x: 1250, w: 40, top: 370, color: '#18121E' },
+      ];
+      for (const bg of bgBuildings) {
+        ctx.fillStyle = bg.color;
+        ctx.fillRect(bg.x, bg.top, bg.w, 720 - bg.top);
+        // Tiny windows
+        ctx.fillStyle = '#FFCC55';
+        ctx.globalAlpha = 0.12;
+        for (let wy = bg.top + 15; wy < 700; wy += 18) {
+          for (let wx = bg.x + 5; wx < bg.x + bg.w - 5; wx += 12) {
+            if (Math.sin(wx * 1.3 + wy * 0.7) > 0) {
+              ctx.fillRect(wx, wy, 4, 5);
+            }
           }
         }
-      }
-      ctx.globalAlpha = 0.35;
-      // Varied rooftops -- some with antenna, some with water tank
-      ctx.fillStyle = bg.color;
-      if (Math.sin(bg.x * 0.1) > 0.3) {
-        // Antenna
-        ctx.fillRect(bg.x + bg.w / 2 - 1, bg.top - 20, 2, 20);
-        ctx.fillStyle = '#FF3333';
-        ctx.globalAlpha = 0.4;
-        ctx.beginPath();
-        ctx.arc(bg.x + bg.w / 2, bg.top - 20, 1.5, 0, Math.PI * 2);
-        ctx.fill();
         ctx.globalAlpha = 0.35;
-      } else if (Math.sin(bg.x * 0.2) > 0) {
-        // Water tank silhouette
-        ctx.fillRect(bg.x + bg.w * 0.3, bg.top - 12, bg.w * 0.4, 12);
+        // Varied rooftops -- some with antenna, some with water tank
+        ctx.fillStyle = bg.color;
+        if (Math.sin(bg.x * 0.1) > 0.3) {
+          // Antenna
+          ctx.fillRect(bg.x + bg.w / 2 - 1, bg.top - 20, 2, 20);
+          ctx.fillStyle = '#FF3333';
+          ctx.globalAlpha = 0.4;
+          ctx.beginPath();
+          ctx.arc(bg.x + bg.w / 2, bg.top - 20, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.35;
+        } else if (Math.sin(bg.x * 0.2) > 0) {
+          // Water tank silhouette
+          ctx.fillRect(bg.x + bg.w * 0.3, bg.top - 12, bg.w * 0.4, 12);
+        }
       }
+
     }
 
     // === Main building facades ===
@@ -1088,13 +1094,6 @@ export const rooftops: ArenaPack = {
       // Dark flue opening — sits inside the cap parallelogram
       ctx.fillStyle = '#0E0810';
       ctx.fillRect(tcx + tcw * 0.25 + tdepth * 0.5, baseY - tch - tdepth * 0.6, tcw * 0.5, 1);
-      // Faint smoke wisp from the flue
-      ctx.strokeStyle = 'rgba(160, 150, 165, 0.18)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(tcx + tcw / 2 + tdepth * 0.5, baseY - tch - tdepth);
-      ctx.quadraticCurveTo(tcx + tcw / 2 + 4, baseY - tch - tdepth - 8, tcx + tcw / 2 + 1, baseY - tch - tdepth - 16);
-      ctx.stroke();
       ctx.restore();
     };
     // B2 upper roof platform is index 6 (y=370). Place small stacks across
