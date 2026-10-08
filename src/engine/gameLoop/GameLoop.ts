@@ -236,6 +236,7 @@ export class GameLoop {
           sArena,
           settings.mods.carrotChase,
           settings.mods.mirrorArena,
+          settings.characterScale,
         ));
       } else {
         this.simulator.setPlayerInput(player.id, new KeyboardInput(
@@ -444,6 +445,9 @@ export class GameLoop {
   /** Swap to a different arena in place. */
   switchArena(arenaId: string, settingsOverrides?: Partial<MatchSettings>): void {
     this.simulator.switchArena(arenaId, settingsOverrides);
+    for (const input of this.simulator.getPlayerInputs().values()) {
+      if (input instanceof RuleBasedBot) input.setMovementScale(this.simulator.getSettings().characterScale);
+    }
     // Cosmetic + renderer wiring needs the new arena/theme/state refs.
     // The simulator Object.assign'd into the existing state, but cosmetic
     // systems captured the prior arena/theme references; rebuild them.
@@ -583,12 +587,14 @@ export class GameLoop {
     const t = perfTrace.begin('tickCosmetic');
     try {
       if (!Number.isFinite(dt) || dt <= 0) return;
+      // Contact feedback must share the simulation tick, not wait for the particle bucket.
+      if (this.simulator.getState().phase !== 'loading') this.playerTransitionSystem.cosmeticUpdate(dt);
       this._cosmeticLead += dt;
       const interval = getSlowDevice() ? COSMETIC_INTERVAL_SLOW : COSMETIC_INTERVAL;
       if (this._cosmeticLead < interval) return;
       const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
       this._cosmeticLead = Math.max(0, this._cosmeticLead - stepDt);
-      this.cosmeticStep(stepDt);
+      this.cosmeticStep(stepDt, true);
     } finally {
       perfTrace.end('tickCosmetic', t);
     }
@@ -637,14 +643,14 @@ export class GameLoop {
   }
 
   /** Tick all cosmetic-only systems (particles, environment, visual decays). */
-  cosmeticStep(dt: number): void {
+  cosmeticStep(dt: number, transitionsUpdated = false): void {
     const tCosmetic = perfTrace.begin('cosmeticStep');
     try {
       if (this.simulator.getState().phase === 'loading') return;
       const tickIdx = this._cosmeticTick++;
 
       const playerTransitionStart = perfTrace.begin('cosmetic.playerTransition');
-      this.playerTransitionSystem.cosmeticUpdate(dt);
+      if (!transitionsUpdated) this.playerTransitionSystem.cosmeticUpdate(dt);
       perfTrace.end('cosmetic.playerTransition', playerTransitionStart);
 
       const playerCosmeticStart = perfTrace.begin('cosmetic.playerCosmetic');

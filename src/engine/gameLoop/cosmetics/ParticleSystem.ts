@@ -7,10 +7,8 @@ import type { ParticleEmitter } from '../../simulator/types';
 import { BLOOD_COLOR, CARROT_SIZE } from '../../constants';
 import { haptics } from '../../haptics';
 import { emitParticle as _emitParticle, spawnDustParticles as _spawnDustParticles, spawnJumpDustParticles as _spawnJumpDustParticles, spawnGoreParticles as _spawnGoreParticles, spawnConfetti as _spawnConfetti, spawnCarrotVFX as _spawnCarrotVFX, spawnRingVFX as _spawnRingVFX, spawnFirework as _spawnFirework, updateParticles, updateConfetti } from './particles';
-import { launchGib, spawnGibs, updateGibs, GIB_FREELIST_CAP } from './gibs';
+import { spawnGibs, updateGibs, GIB_FREELIST_CAP } from './gibs';
 import { updateWeather } from './environment';
-
-const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
 
 export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   private state: MatchState;
@@ -72,12 +70,12 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     _emitParticle(this._particles, this.particleFreeList, x, y, vx, vy, life, size, color, shape);
   }
 
-  spawnDustParticles(player: Player, landVy: number): void {
-    _spawnDustParticles(this._particles, this.particleFreeList, player, landVy, this.theme.ground.surfaceColor);
+  spawnDustParticles(player: Player, landVy: number, fastStomp = false): void {
+    _spawnDustParticles(this._particles, this.particleFreeList, player, landVy, this.theme.ground.surfaceColor, fastStomp);
   }
 
-  spawnJumpDustParticles(player: Player): void {
-    _spawnJumpDustParticles(this._particles, this.particleFreeList, player);
+  spawnJumpDustParticles(player: Player, launchY?: number): void {
+    _spawnJumpDustParticles(this._particles, this.particleFreeList, player, launchY);
   }
 
   spawnGoreParticles(victim: Player, extremeGore: boolean): void {
@@ -90,6 +88,15 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
 
   spawnCarrotVFX(x: number, y: number): void {
     _spawnCarrotVFX(this._particles, this.particleFreeList, x, y);
+  }
+
+  spawnBurnCough(player: Player): void {
+    this.emitParticle(player.x + player.width / 2, player.y + player.height, 0, 0, .59, player.height / 40, '#B0A08A', 'burnCough');
+  }
+
+  spawnPlayerEntrance(cx: number, cy: number): void {
+    const player = this.state.players.find(p => Math.abs(p.x + p.width / 2 - cx) < .1 && Math.abs(p.y + p.height / 2 - cy) < .1);
+    this.emitParticle(cx, cy, 0, 0, .85, player ? player.height / 32 : 1, '#FFF0DC', 'respawnCloud');
   }
 
   spawnRingVFX(cx: number, cy: number): void {
@@ -111,30 +118,27 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     }
   }
 
-  /** Orchestration: connects gib launcher + particle emitter for carrot pickup. */
+  /** Selected cartoon chip-and-leaf burst for carrot pickup. */
   pickupCarrotVFX(x: number, y: number): void {
     const cy = y + CARROT_SIZE / 2;
-    // Orange carrot chunks
-    for (let i = 0; i < 4; i++) {
-      const s = 4 + Math.random() * 3;
-      launchGib(this.state.gibs, this.gibFreeList, x, cy, 10, 0.15, 0.85, 80, 200, s, s, '#FF8C00', '#CC6600', '#FFB040', '', 'body');
-    }
-    // Green leaf pieces
-    for (let i = 0; i < 2; i++) {
-      launchGib(this.state.gibs, this.gibFreeList, x, cy, 8, 0.2, 0.8, 60, 160, 5, 3, '#4CAF50', '#2E7D32', '#81C784', '', 'body');
-    }
-    // Orange/gold particle burst
-    for (let i = 0; i < 16; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 80 + Math.random() * 140;
-      const life = 0.3 + Math.random() * 0.4;
-      this.emitParticle(x, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, life, 2 + Math.random() * 5, CARROT_PICKUP_COLORS[i % CARROT_PICKUP_COLORS.length]);
-    }
-    // Upward gold sparkle ring
+    // Large inked pieces, with a short readable hold before fading.
     for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const speed = 30 + Math.random() * 30;
-      this.emitParticle(x, cy, Math.cos(angle) * speed, -50 - Math.random() * 40, 0.4 + Math.random() * 0.2, 1.5 + Math.random() * 2, '#FFD700');
+      const angle = -Math.PI * .93 + i * .37;
+      const ux = Math.cos(angle), uy = Math.sin(angle);
+      this.emitParticle(x + ux * 14, cy + uy * 14, ux * 125, uy * 125,
+        .34, 5 + (i % 3) * 1.2, '#EE9851', 'carrotChip');
+    }
+    for (let i = 0; i < 5; i++) {
+      const angle = -2.6 + i * .55;
+      const ux = Math.cos(angle), uy = Math.sin(angle);
+      this.emitParticle(x + ux * 16, cy + uy * 16, ux * (135 + i * 6), uy * (135 + i * 6),
+        .4, 8 + i * 1.5, '#91B675', 'carrotLeaf');
+    }
+    for (let i = 0; i < 6; i++) {
+      const angle = -2.98 + i * .855;
+      const ux = Math.cos(angle), uy = Math.sin(angle);
+      this.emitParticle(x + ux * 24, cy + uy * 24, ux * 165, uy * 165,
+        .22, 2.5 + (i % 3) * .6, '#FFF3D5', 'spike');
     }
   }
 
@@ -165,29 +169,15 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
         if (!resimulating) {
           state.screenFlash = Math.max(state.screenFlash, 0.18);
         }
-        // Blood droplets — emitted as spikes so they read as elongated splatter
-        // streaks rather than round dots. Velocity-aligned via the 'spike' shape.
-        for (let i = 0; i < 18; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 90 + Math.random() * 180;
-          const life = 0.4 + Math.random() * 0.5;
-          this.emitParticle(px + (Math.random() - 0.5) * 8, py + (Math.random() - 0.5) * 8, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 2 + Math.random() * 3, BLOOD_COLOR, 'spike');
-        }
-        if (hit.sx !== undefined && hit.sy !== undefined) {
-          // Wood barb fragments — bias upward (away from the spike).
-          for (let i = 0; i < 14; i++) {
-            const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
-            const speed = 90 + Math.random() * 160;
-            const life = 0.3 + Math.random() * 0.4;
-            const color = i % 2 === 0 ? '#5C3A1E' : '#3A2210';
-            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.4 + Math.random() * 1.8, color, 'spike');
-          }
-          // Slow blood drip from the thorn tip.
-          this.emitParticle(hit.sx, hit.sy, 0, 30, 1.0, 1.8, BLOOD_COLOR);
-        }
+        // One stationary cartoon impact, with inked chips drawn from its age.
+        const player = state.players.find(p => p.id === playerId);
+        const scale = player ? player.width / 32 : 1;
+        this.emitParticle(px, py, 0, 0, .48, 22 * scale, '#FFF0CB', 'thornJolt');
         break;
       }
       case 'hazardZone': {
+        // Lava smoke is emitted by the transported burn-timer transition.
+        if (hit.hazardType === 'lava') break;
         for (let i = 0; i < 24; i++) {
           const angle = Math.random() * Math.PI * 2;
           const speed = 80 + Math.random() * 200;
@@ -217,18 +207,10 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
         }
         break;
       }
-      case 'spring': {
-        // Small upward fan of yellow spikes — release energy, kept subtle so it
-        // doesn't compete with the player's launch motion.
-        for (let i = 0; i < 8; i++) {
-          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.0;
-          const speed = 100 + Math.random() * 120;
-          const life = 0.2 + Math.random() * 0.2;
-          const color = i % 2 === 0 ? '#FFD43A' : '#FFA800';
-          this.emitParticle(px, py, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.2 + Math.random() * 1.2, color, 'spike');
-        }
+      case 'spring':
+        // Boing accents use the shared launch timer/anchor in the renderer.
+        // Do not stack the old random yellow spikes behind them.
         break;
-      }
       case 'fallOff':
         // No particles — handled by spawnKillSplatter elsewhere.
         break;

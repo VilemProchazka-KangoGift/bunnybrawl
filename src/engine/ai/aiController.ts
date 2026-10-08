@@ -75,7 +75,7 @@ export class AIController {
     return this._lastNavTarget;
   }
 
-  getInput(self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false): InputState {
+  getInput(self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false, movementScale = 1): InputState {
     if (!self.active || self.state === 'splat' || self.state === 'respawning') {
       return NO_INPUT;
     }
@@ -124,7 +124,7 @@ export class AIController {
     const isDecisionFrame = this.frameCounter % 3 === this.botIndex % 3;
     const writeSlot = this.ringBuffer[this.ringWrite];
     if (isDecisionFrame) {
-      this.computeIdealInputInto(writeSlot, self, state, arena, carrotChase, mirrorNav);
+      this.computeIdealInputInto(writeSlot, self, state, arena, carrotChase, mirrorNav, movementScale);
     } else {
       const prevSlot = this.ringBuffer[(this.ringWrite - 1 + this.ringSize) % this.ringSize];
       writeSlot.left = prevSlot.left;
@@ -157,10 +157,10 @@ export class AIController {
     return delayed;
   }
 
-  private computeIdealInputInto(out: InputState, self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false): void {
+  private computeIdealInputInto(out: InputState, self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false, movementScale = 1): void {
     // Build awareness once, reuse for stuck recovery and normal path
     const preferSafe = this.personality.cautiousness >= 1.2;
-    const awareness = buildAwarenessInto(this._awarenessScratch, self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe, mirrorNav);
+    const awareness = buildAwarenessInto(this._awarenessScratch, self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe, mirrorNav, movementScale);
     this._lastNavTarget = awareness.navTarget;
 
     if (this.stuckTimer > 45) {

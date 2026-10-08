@@ -13,6 +13,7 @@ export function applyEffectZones(
   sfxCooldowns: PlayerSfxCooldowns,
   playSound: (name: string) => void,
   dt: number,
+  movementScale = 1,
 ): void {
   for (let zi = 0; zi < effectZones.length; zi++) {
     const zone: EffectZone = effectZones[zi];
@@ -25,8 +26,8 @@ export function applyEffectZones(
         player.vy = f(player.vy * 1.03);
       }
     } else if (zone.type === 'current') {
-      player.vx = f(player.vx + f((zone.vx || 0) * dt));
-      player.vy = f(player.vy + f((zone.vy || 0) * dt));
+      player.vx = f(player.vx + f((zone.vx || 0) * movementScale * dt));
+      player.vy = f(player.vy + f((zone.vy || 0) * movementScale * dt));
       // Splash when entering waterfall
       if (justLanded || (wasAirborne && prevVy >= 200)) {
         if (sfxCooldowns.land.isReady(player.id)) {
@@ -37,7 +38,7 @@ export function applyEffectZones(
     } else if (zone.type === 'geyser') {
       const geyserIdx = geyserIndexMap.get(zone) ?? -1;
       if (geyserIdx >= 0 && geyserStates[geyserIdx]?.active) {
-        player.vy = f(Math.min(player.vy, zone.strength || -550));
+        player.vy = f(Math.min(player.vy, (zone.strength || -550) * movementScale));
         player.state = 'airborne';
       }
     }

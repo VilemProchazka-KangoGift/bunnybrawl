@@ -1,9 +1,15 @@
+import { drawBurnCough } from './burnEffects';
+import { drawRespawnEntrance } from './respawnEffects';
+import { drawThornJolt } from './thornEffects';
+import { drawCarrotPiece } from './carrotEffects';
 import type { Ctx2D } from '../types';
 import type { Particle, WeatherParticle, WildlifeEntity, Gib, ConfettiParticle, Player } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, SPRING_TRAIL_DURATION } from '../constants';
 import { getGibRenderer } from '../characters';
 import { hexToRGB } from '../fastMath';
+import { drawMovementPuff, drawImpactCrown } from './movementEffects';
+import { drawSpringBoing } from './springEffects';
 
 const _rgbStringCache = new Map<string, string>();
 function rgbString(hex: string): string {
@@ -76,9 +82,29 @@ export function drawWeather(ctx: Ctx2D, weather: WeatherParticle[], theme: Theme
 export function drawParticles(ctx: Ctx2D, particles: Particle[], lead = 0): void {
   let lastColor = '';
   for (const p of particles) {
+    if (p.shape === 'respawnCloud' || p.shape === 'burnCough') continue;
     const dx = p.x + p.vx * lead;
     const dy = p.y + p.vy * lead;
     if (dx < -20 || dx > CANVAS_WIDTH + 20 || dy < -20 || dy > CANVAS_HEIGHT + 20) continue;
+    if (p.shape === 'thornJolt') {
+      ctx.globalAlpha = 1;
+      drawThornJolt(ctx, p, lead); lastColor = ''; continue;
+    }
+    if (p.shape === 'carrotChip' || p.shape === 'carrotLeaf') {
+      drawCarrotPiece(ctx, p, lead);
+      lastColor = '';
+      continue;
+    }
+    if (p.shape === 'impactCrown') {
+      drawImpactCrown(ctx, p, lead);
+      lastColor = '';
+      continue;
+    }
+    if (p.shape === 'jumpCloud' || p.shape === 'landingCloud') {
+      drawMovementPuff(ctx, p, lead);
+      lastColor = ''; // Cloud fill changes the context color.
+      continue;
+    }
     const alpha = p.life / p.maxLife;
     ctx.globalAlpha = alpha * 0.7;
     if (p.color !== lastColor) {
@@ -360,44 +386,17 @@ export function drawWildlife(ctx: Ctx2D, wildlife: WildlifeEntity[]): void {
   }
 }
 
-export function drawSpringTrail(ctx: Ctx2D, player: Player, frameTime: number): void {
-  // Anchored at the spring (where the player launched from), not the moving player.
-  // Two layers: a yellow energy column rising out of the spring + animated coil
-  // rings racing up the column, both fading with springTrailTimer.
-  const t = player.springTrailTimer / SPRING_TRAIL_DURATION;
-  if (t <= 0 || !Number.isFinite(player.springLaunchX)) return;
-  const launchX = player.springLaunchX;
-  const launchY = player.springLaunchY;
+/** Retains the shared launch timer/anchor transport for both worker modes. */
+export function drawSpringTrail(ctx: Ctx2D, player: Player, _frameTime: number): void {
+  if (player.springTrailTimer <= 0) return;
+  const age = Math.max(0, SPRING_TRAIL_DURATION - player.springTrailTimer);
+  drawSpringBoing(ctx, player.springLaunchX, player.springLaunchY, age);
+}
 
-  const COL_H = 70;
-  const COL_HALF_W = 7;
-
-  // Per-frame linear gradient over a small ellipse (~770 px). Below the
-  // ~10k-pixel threshold for the bake-strip swap (see docs/perf-patterns.md);
-  // direct gradient fill is cheaper here.
-  const grad = ctx.createLinearGradient(launchX, launchY, launchX, launchY - COL_H);
-  grad.addColorStop(0, `rgba(255,212,90,${0.4 * t})`);
-  grad.addColorStop(0.55, `rgba(255,180,40,${0.16 * t})`);
-  grad.addColorStop(1, 'rgba(255,180,40,0)');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.ellipse(launchX, launchY - COL_H / 2, COL_HALF_W, COL_H / 2, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Coil rings racing upward — phase advances with timer + frameTime so rings
-  // appear to rise out of the spring, evoking spring coils releasing.
-  const RING_COUNT = 2;
-  const animPhase = (1 - t) * 1.6 + frameTime * 0.002;
-  ctx.strokeStyle = `rgba(255,235,120,${0.55 * t})`;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  for (let i = 0; i < RING_COUNT; i++) {
-    const phase = (animPhase + i / RING_COUNT) % 1;
-    const ry = launchY - phase * COL_H;
-    const rw = 5 + phase * 7;
-    // moveTo before each ellipse so sub-paths don't connect with a stroke line.
-    ctx.moveTo(launchX + rw, ry);
-    ctx.ellipse(launchX, ry, rw, 2, 0, 0, Math.PI * 2);
-  }
-  ctx.stroke();
+/** Reveal clouds cover the feet, then terrain overlays cover the clouds. */
+export function drawRespawnEntrances(ctx: Ctx2D, particles: readonly Particle[], lead = 0): void {
+ for(const p of particles) {
+  if(p.shape==='respawnCloud')drawRespawnEntrance(ctx,p,lead);
+  else if(p.shape==='burnCough')drawBurnCough(ctx,p,lead);
+ }
 }

@@ -818,7 +818,7 @@
 
 .char-selector-modal {
   text-align: center;
-  min-width: 520px;
+  min-width: 620px;
   max-width: 720px;
 }
 
@@ -864,7 +864,7 @@
 }
 
 .char-selector-card.selected .char-selector-name {
-  color: #FFD700;
+  color: var(--ui-ink);
   font-weight: 700;
 }
 
@@ -873,9 +873,9 @@
   cursor: not-allowed;
 }
 
-.char-selector-emoji {
-  font-size: 28px;
-  line-height: 1;
+.char-selector-card .char-selector-portrait {
+  width: 60px;
+  height: 60px;
 }
 
 .char-selector-name {

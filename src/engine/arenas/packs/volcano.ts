@@ -1,3 +1,4 @@
+import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, WeatherParticle, Ctx2D } from '../../types';
@@ -337,7 +338,7 @@ export const volcano: ArenaPack = {
 
   // ---- Ambient systems ----
   clouds: {
-    count: 3,
+    count: 0, // Clouds belong to the painted plate.
     color: 'rgba(80, 40, 20, 0.4)',
     minSize: 60,
     maxSize: 100,
@@ -390,6 +391,8 @@ export const volcano: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
+    if (drawPaintedBackdrop(ctx, 'volcano')) return;
+
     ctx.save();
     // Distant volcano silhouette
     ctx.fillStyle = '#1A0808';

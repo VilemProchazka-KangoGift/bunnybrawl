@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ember cough practice</title><style>body{margin:0;background:#332b25;color:#fff3d5;font:14px system-ui}header{padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}button{font:inherit;padding:6px 10px}iframe{border:0;width:100%;height:calc(100vh - 60px);display:block}</style></head><body>
+<header><span>Ember cough · A/D move · W jump</span><button id="reset" type="button">Burn again</button><span id="status" role="status">Loading…</span></header>
+<iframe id="game" title="Live Ember cough practice" src="../../../?arena=meadow&amp;bots=0&amp;simWorker=off&amp;killLimit=100"></iframe>
+<script type="module">
+const {handleHazardZoneCollision}=await import('../../../src/engine/gameLoop/gameplay/playerCollisions.ts');
+const frame=document.getElementById('game'),status=document.getElementById('status');
+function seed(){
+ const win=frame.contentWindow,s=win.__bunnyTest?.state();if(!s||s.countdown!==0||s.phase!=='playing')return false;
+ const p=s.players.find(p=>p.id==='P1');if(!p)return false;
+ for(const other of s.players)if(other!==p)other.active=false;
+ s.springs=[];s.carrots=[];s.thorns=[];s.carrotTimer=3600;s.springSpawnTimer=3600;s.thornSpawnTimer=3600;
+ p.x=740;p.y=660-p.height;p.vx=0;p.vy=0;p.state='idle';p.fatTimer=0;p.slowTimer=0;p.burnTimer=0;p.sideSquash=1;p.hitstopTimer=0;p.invincibleTimer=0;p.splatTimer=0;p.respawnTimer=0;p.active=true;p.fastFalling=false;p.springTrailTimer=0;
+ win.__bunnyTest.gameLoop().resetCosmeticBaselines();
+ const hit=handleHazardZoneCollision(p,{hazardZones:[{x:720,y:644,width:80,height:16,type:'lava'}]});
+ if(!hit)throw Error('Practice lava contact failed');
+ win.__bunnyTest.gameLoop().particleSystem.applyHazardHitVFX(hit,'P1',s,false);
+ status.textContent='Live Ember cough · main simulation / renderer worker';frame.focus();return true;
+}
+document.getElementById('reset').onclick=seed;
+const ready=setInterval(()=>{if(seed())clearInterval(ready)},100);
+</script></body></html>

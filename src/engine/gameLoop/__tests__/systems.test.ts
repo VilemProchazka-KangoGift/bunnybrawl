@@ -275,6 +275,16 @@ describe('ParticleSystem', () => {
     );
   }
 
+  it('thorn hits emit one stationary cartoon jolt and retain the impact flash', () => {
+    const state = makeSystemState();
+    const sys = makeParticleSystem(state);
+    sys.applyHazardHitVFX({type:'thorn',px:100,py:200,sx:100,sy:216},'P1',state,false);
+    const particles = sys.getParticles();
+    expect(particles).toHaveLength(1);
+    expect(particles[0]).toMatchObject({shape:'thornJolt',x:100,y:200,vx:0,vy:0,life:.48});
+    expect(state.screenFlash).toBeGreaterThanOrEqual(.18);
+  });
+
   it('init() is a no-op', () => {
     const state = makeSystemState();
     const sys = makeParticleSystem(state);
@@ -345,6 +355,39 @@ describe('PlayerTransitionSystem', () => {
     const playAnimal = vi.fn();
     return { sys: new PlayerTransitionSystem(state, mockSettings, playSound, playAnimal, particleSys), playSound, playAnimal };
   }
+
+  it('emits stationary reveal clouds on start and respawn without spawn light bursts', () => {
+    const player=makePlayer({id:'P1',x:100,y:200,invincibleTimer:0});
+    const state=makeSystemState({players:[player]});
+    const ps=new ParticleSystem(state,mockArena,mockTheme,mockSettings,new Map());
+    const light=vi.fn();
+    const sys=new PlayerTransitionSystem(state,mockSettings,vi.fn(),vi.fn(),ps,undefined,light);
+    sys.init();
+    expect(ps.getParticles()).toHaveLength(1);
+    expect(ps.getParticles()[0]).toMatchObject({shape:'respawnCloud',x:116,y:216,vx:0,vy:0,maxLife:.85});
+    player.invincibleTimer=1.5;sys.cosmeticUpdate(1/60);
+    expect(ps.getParticles()).toHaveLength(2);expect(light).not.toHaveBeenCalled();
+    sys.cosmeticUpdate(1/60);expect(ps.getParticles()).toHaveLength(2);
+    expect(player.invincibleTimer).toBe(1.5);
+  });
+
+  it('burn hits emit once, stay stationary, and repeat only on a refreshed burn', () => {
+    const player=makePlayer({id:'P1',burnTimer:0});
+    const state=makeSystemState({players:[player]});
+    const ps=new ParticleSystem(state,mockArena,mockTheme,mockSettings,new Map());
+    const sys=new PlayerTransitionSystem(state,mockSettings,vi.fn(),vi.fn(),ps);
+    sys.init();player.burnTimer=5;sys.cosmeticUpdate(1/60);
+    expect(ps.getParticles().filter(p=>p.shape==='burnCough')).toHaveLength(1);
+    const cough=ps.getParticles().find(p=>p.shape==='burnCough')!;
+    expect(cough).toMatchObject({vx:0,vy:0,maxLife:.59});
+    const x=cough.x,y=cough.y;ps.cosmeticUpdate(.1);
+    expect(cough.x).toBe(x);expect(cough.y).toBe(y);
+    player.burnTimer=4.5;sys.cosmeticUpdate(1/60);
+    expect(ps.getParticles().filter(p=>p.shape==='burnCough')).toHaveLength(1);
+    player.burnTimer=5;sys.cosmeticUpdate(1/60);
+    expect(ps.getParticles().filter(p=>p.shape==='burnCough')).toHaveLength(2);
+    expect(player.burnTimer).toBe(5);
+  });
 
   it('init() populates prevCosmeticState for each player', () => {
     const state = makeSystemState();

@@ -265,6 +265,27 @@ For arena geometry and draw-layer contracts, also read [`level-design.md`](../le
 
 ### Saturday morning UI implementation
 
+The settings roster selector uses the shared `CharacterPortrait` component, not emoji icons. Its 620px minimum width fits all 19 portraits in four rows within the 1280×720 logical canvas; check the entire modal, including its title and close button, after changing portrait size.
+
+Match HUD portraits use 60px in full-width tickets (45px in compact tickets), with feet anchored at y=67. The former 78px size started at y=-11 and clipped against the canvas top. Leave headroom for ticket rotation and the 6% goal pulse when changing this size.
+
 The approved UI uses `src/uiTheme.ts`, `src/components/saturday.css`, and compact cutout portraits in `public/ui/portraits/`. Canvas portraits decode once per renderer realm; `getPortraitRevision()` invalidates the static HUD after an image finishes loading. Keep this worker-safe and keep portraits out of the pure simulator.
 
 The arena picker starts collapsed and new preferences default to Random. Browser tests must open its disclosure before choosing an arena. Online character selection remains a dropdown with image buttons; tests select enabled options and inspect `data-character`, rather than calling native `selectOption()`. Lobby ticket styling is independent of lobby terrain, props, obstacle, and start-zone art; the level redesign is deferred.
+
+### Lobby tutorial obstacle art
+
+The fallen lobby log deliberately uses a 120×80 collision body instead of the former narrow 24×120 wall. Keep its bark top at `WALL_Y` and foot at `GROUND_Y`, and rerun `lobbyScale.test.ts` to prove that walking is blocked and jumping clears it at all supported scales. Collision tests should use `WALL_X/WALL_Y/WALL_WIDTH` rather than literal coordinates, so future intentional geometry changes do not invalidate the setup. Start/countdown cards and ground instruction cards share the Saturday UI palette; check wrapped text in all four languages and keep countdown below the top UI but above standing character labels.
+
+The ready zone is a bounded gathering area: use a downward cue and explicit stay-in-area instructions. A button-shaped Start sign with a right arrow misleadingly suggests leaving the screen. Keep the right ground marker inset and show the required player count. Give the log tutorial a localized jump instruction and a visible arc over the obstacle; bark detail alone does not explain the action.
+
+The [revised nine-arena gallery](../../../docs/mockups/painted-arenas/README.md) records the selected settings beyond Meadow and Winter Lake. Match the arena brief before choosing a pale distant landscape: Rooftops is nighttime modern Manhattan; Treetops is inside jungle below the canopy with a light shaft; Waterfall is a near cliff with no distant vista; Volcano is desolate with lava rivers; Castle is a dark interior with a full moon through a window; the cemetery needs dense graves on dry ground; Candy Land is sweets rather than a kingdom; Space Station is an interior with Earth through the central window. Underwater's first plate was approved unchanged. Clouds are baked into this batch and procedural cloud counts are zero; never bake birds or smoke into a static plate. Existing animated wildlife/weather/smoke remain live. Inspect layer ownership: Rooftops owns platform-supporting facades, the cemetery owns its moon/stars, and Underwater owns surface shimmer. Space Station's selected full interior plate includes its window, with the procedural clipped hangar retained as fallback. Waterfall's animated water begins visually at the rock lip without changing the force-zone bounds. Use matched renderer captures and direct-entry/switch E2E in both worker modes.
+
+Background hierarchy: a recognizable setting does not require dense detail. The selected third painting revision uses pale muted colors, compressed values, broad shapes and soft edges. Remove repeated window lights, leaf veins, stone cracks, stars and sprinkles before adding detail. Compare beneath the actual outlined characters and collision platforms; an attractive standalone painting can still compete with gameplay. Keep nighttime identity with a subdued blue-grey palette rather than deep black shadows.
+
+The approved station composition allows a dark starfield inside its central window because no platforms occupy the middle. Keep worn side walls pale so the platform lanes stay readable; background contrast can follow the actual gameplay layout rather than being uniform across the plate.
+### Shared sky artwork
+
+Default clouds and Meadow use `appendCloudPath` for connected billows; keep the default renderer batching all clouds into one fill. Celestial art stays in `rendering/effects.ts`, with flat layers and short rays instead of per-frame gradients or blur. The closed moon crescent avoids painting a sky-colored cutout outside its silhouette. Sky captures live in `docs/mockups/sky-art/`; `e2e/sky-art.spec.ts` checks both worker modes and pins day, sunset, and night only in `simWorker=off`, because the default worker owns its simulation phase. Wait for countdown zero before capturing.
+
+Sky layer order: `drawSkyCycle` belongs before animated backgrounds and moving clouds, while `drawDayNightCycle` retains foreground fireflies. Do not combine them into a late overlay: that paints the sun and moon over clouds. When enlarging celestial art, leave headroom for its halo at the top of its arc. Renderer tests assert the sky/cloud/foreground ordering.

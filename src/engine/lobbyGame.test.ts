@@ -1,3 +1,4 @@
+import { WALL_X, WALL_Y, WALL_WIDTH } from './lobbyConstants';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LobbyGame, READY_ZONE_X } from './lobbyGame';
 import { PLAYER_WIDTH } from './constants';
@@ -711,7 +712,7 @@ describe('LobbyGame', () => {
         e.x = -500; e.vy = 0; e.vx = 0; e.splatTimer = 0;
       }
       const p = game.players[0];
-      // WALL_X=742.4, WALL_WIDTH=24, WALL_Y=560-120=440
+      // Place the player above the current tutorial log.
       p.x = 750; // on top of wall
       p.y = 300; // above wall
       p.vy = 200; // falling
@@ -723,7 +724,7 @@ describe('LobbyGame', () => {
 
       // Player should land on top of the wall
       expect(p.state).not.toBe('airborne');
-      expect(p.y).toBeCloseTo(440 - 32, 0); // WALL_Y - PLAYER_HEIGHT
+      expect(p.y).toBeCloseTo(WALL_Y - p.height, 0); // WALL_Y - PLAYER_HEIGHT
     });
 
     it('wall collision triggers sideSquash', () => {
@@ -1028,8 +1029,8 @@ describe('LobbyGame', () => {
         e.x = -500; e.vy = 0; e.vx = 0; e.splatTimer = 0;
       }
       const p = game.players[0];
-      // WALL_X=742.4, WALL_WIDTH=24 → right edge at 766.4
-      p.x = 770; // just right of wall
+      // Approach the tutorial log from its right edge.
+      p.x = WALL_X + WALL_WIDTH + 4; // just right of log
       p.vx = -200; // moving left into wall
       p.y = 560 - 32; // at ground level
       p.state = 'idle';
@@ -1040,7 +1041,7 @@ describe('LobbyGame', () => {
       }
 
       // Player should be pushed to wall right edge
-      expect(p.x).toBeGreaterThanOrEqual(742.4 + 24 - 1);
+      expect(p.x).toBeGreaterThanOrEqual(WALL_X + WALL_WIDTH - 1);
     });
   });
 

@@ -1,3 +1,4 @@
+import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, WeatherParticle, Ctx2D } from '../../types';
@@ -400,7 +401,7 @@ export const castle: ArenaPack = {
 
   // ---- Ambient systems ----
   clouds: {
-    count: 0,
+    count: 0, // Clouds belong to the painted plate.
     color: 'rgba(30, 30, 60, 0.3)',
     minSize: 40,
     maxSize: 60,
@@ -453,6 +454,8 @@ export const castle: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
+    if (drawPaintedBackdrop(ctx, 'castle')) return;
+
     ctx.save();
 
     // Stone wall background — fill entire background with wall texture

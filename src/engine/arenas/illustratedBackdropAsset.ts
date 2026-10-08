@@ -1,6 +1,15 @@
 // Kept outside packs/ so menu and lobby can fetch selected art without loading
 // every arena. Each canvas-owning worker decodes its own copy of the cached URL.
 const urls = {
+  rooftops: new URL('./assets/rooftops-painted.webp', import.meta.url).href,
+  treetops: new URL('./assets/treetops-painted.webp', import.meta.url).href,
+  waterfall: new URL('./assets/waterfall-painted.webp', import.meta.url).href,
+  volcano: new URL('./assets/volcano-painted.webp', import.meta.url).href,
+  castle: new URL('./assets/castle-painted.webp', import.meta.url).href,
+  haunted_graveyard: new URL('./assets/haunted-graveyard-painted.webp', import.meta.url).href,
+  candy_land: new URL('./assets/candy-land-painted.webp', import.meta.url).href,
+  underwater: new URL('./assets/underwater-painted.webp', import.meta.url).href,
+  space_station: new URL('./assets/space-station-painted.webp', import.meta.url).href,
   meadow: new URL('./assets/meadow-low-valley.webp', import.meta.url).href,
   winter_lake: new URL('./assets/winter-lake-pearl-painted.webp', import.meta.url).href,
 } as const;
@@ -44,6 +53,15 @@ function createBackdrop(url: string) {
 }
 
 const backdrops = {
+  rooftops: createBackdrop(urls.rooftops),
+  treetops: createBackdrop(urls.treetops),
+  waterfall: createBackdrop(urls.waterfall),
+  volcano: createBackdrop(urls.volcano),
+  castle: createBackdrop(urls.castle),
+  haunted_graveyard: createBackdrop(urls.haunted_graveyard),
+  candy_land: createBackdrop(urls.candy_land),
+  underwater: createBackdrop(urls.underwater),
+  space_station: createBackdrop(urls.space_station),
   meadow: createBackdrop(urls.meadow),
   winter_lake: createBackdrop(urls.winter_lake),
 };

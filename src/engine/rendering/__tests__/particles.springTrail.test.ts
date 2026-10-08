@@ -1,42 +1,42 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { drawSpringTrail } from '../particles';
+import { SPRING_TRAIL_DURATION } from '../../constants';
 import type { Player } from '../../types';
 import { createMockCanvasCtx } from '../../__tests__/mockCanvas';
 
-function makePlayer(): Player {
-  return {
-    id: 'P1', x: 100, y: 200, width: 28, height: 40,
-    springTrailTimer: 0.4,
-    springLaunchX: 250,
-    springLaunchY: 600,
-    character: { name: 'Bunny', color: '#FFFFFF', darkColor: '#000000', lightColor: '#888888', emoji: '🐰' } as never,
-  } as unknown as Player;
-}
+const launch = (overrides: Partial<Player> = {}): Player => ({
+  x: 100, y: 200, springTrailTimer: SPRING_TRAIL_DURATION,
+  springLaunchX: 250, springLaunchY: 600, ...overrides,
+} as Player);
 
-describe('drawSpringTrail', () => {
-  it('draws a gradient-filled energy column plus stroked coil rings', () => {
-    const ctx = createMockCanvasCtx();
-    drawSpringTrail(ctx, makePlayer(), 0);
-    // One fill (column) + one stroke (rings combined into a single path).
-    expect(ctx.fill).toHaveBeenCalledTimes(1);
-    expect(ctx.stroke).toHaveBeenCalledTimes(1);
-    expect(ctx.createLinearGradient).toHaveBeenCalled();
+describe('spring boing accents', () => {
+  it('appears at full opacity at the mushroom cap, preserving inherited opacity', () => {
+    const ctx = createMockCanvasCtx(); ctx.globalAlpha = 0.6;
+    drawSpringTrail(ctx, launch(), 0);
+    expect(ctx.translate).toHaveBeenCalledWith(250, 564);
+    expect(ctx.fill).toHaveBeenCalledTimes(5);
+    expect(ctx.stroke).toHaveBeenCalledTimes(5);
+    expect(ctx.lineTo).toHaveBeenCalled();
+    expect(ctx.createLinearGradient).not.toHaveBeenCalled();
+    expect(ctx.ellipse).not.toHaveBeenCalled();
+    expect(ctx.globalAlpha).toBe(0.6);
+    expect(ctx.save).toHaveBeenCalledOnce();
+    expect(ctx.restore).toHaveBeenCalledOnce();
   });
-
-  it('renders the rings with ellipse, not line segments', () => {
-    const ctx = createMockCanvasCtx();
-    drawSpringTrail(ctx, makePlayer(), 0);
-    // Column ellipse + 2 coil rings = at least 3 ellipse calls.
-    expect((ctx.ellipse as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(3);
-    // No lineTo segments — this is no longer a polyline curlicue.
-    expect((ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  it('stays at the launch point and depends on launch age rather than the wall clock', () => {
+    const a = createMockCanvasCtx(), b = createMockCanvasCtx();
+    const timer = SPRING_TRAIL_DURATION - 0.07;
+    drawSpringTrail(a, launch({ springTrailTimer: timer }), 0);
+    drawSpringTrail(b, launch({ x: 900, y: 20, springTrailTimer: timer }), 123456);
+    expect(a.moveTo.mock.calls).toEqual(b.moveTo.mock.calls);
+    expect(a.translate.mock.calls).toEqual(b.translate.mock.calls);
   });
-
-  it('returns without drawing when the timer is zero', () => {
+  it.each([
+    { springTrailTimer: 0 }, { springTrailTimer: SPRING_TRAIL_DURATION - 0.19 },
+    { springLaunchX: NaN }, { springLaunchY: NaN }, { springTrailTimer: NaN },
+  ])('does not draw an expired or invalid launch: %j', overrides => {
     const ctx = createMockCanvasCtx();
-    const p = makePlayer();
-    p.springTrailTimer = 0;
-    drawSpringTrail(ctx, p, 0);
+    drawSpringTrail(ctx, launch(overrides), 0);
     expect(ctx.fill).not.toHaveBeenCalled();
     expect(ctx.stroke).not.toHaveBeenCalled();
   });

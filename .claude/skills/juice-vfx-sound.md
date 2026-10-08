@@ -70,6 +70,22 @@ Set `ambientSoundConfig` on the `ArenaPack`:
 
 ## Visual Effects
 
+### Spring Boing accents
+
+Spring bounce uses five brief cream-and-ink accents anchored at `springLaunchX`, `springLaunchY - 36` (the mushroom cap). `rendering/springEffects.ts` draws the selected study for 0.18 seconds, replacing the glow column, rings, and random yellow spark burst. Keep the existing 0.35-second spring transport timer: derive launch age from that timer, rather than global frame time. The effect must not follow the player, restart midway, or leak canvas opacity. The spring study freezes the previous renderer in `docs/mockups/spring-vfx/baseline.js` so regenerating the gallery does not silently replace its reference with the newly selected effect.
+
+### Cartoon movement family
+
+The selected movement effects are **Cloud pop** on input-jump, **Pose echoes** on a downward fast stomp, **Side puffs** on ordinary landing, and **Impact crown** on fast-stomp ground contact. The alternatives and live day/night crops are in `docs/mockups/movement-vfx/`. The standalone study uses scripted motion; judge the implementation in the real renderer.
+
+- Contact clouds use `jumpCloud` / `landingCloud` particles and `rendering/movementEffects.ts`. They expand and fade instead of shrinking as dots. Keep the jump cloud anchored to the **previous grounded foot Y**: cosmetic transition detection runs after physics has already moved the player. Thread that coordinate through both `snapshotPlayerCosmeticState` and `PlayerTransitionSystem._snapshotPooled`; the system uses the pooled snapshot at runtime.
+- Fast-stomp crowns must use the previous descending `fastFalling` state: physics clears that flag on contact. Emit one stationary irregular inked `impactCrown` at the grounded feet, at full size for 0.16 seconds, replacing ordinary side puffs; preserve its shape through SAB packing.
+- Landing clouds move horizontally without particle gravity so they stay on the contact plane. Both cloud shapes use the shared cream palette and restrained ink edge; ordinary footsteps keep their surface colors.
+- A new particle shape must survive **both** structured cloning and the packed SAB wire. `worker/sabParticles.ts` uses bits 24-26 for five shapes. Round-trip tests must distinguish clouds from spikes and check recycled slots return to circles.
+- Fast stomp draws two translucent cached copies of the attack pose before the main sprite. Gate at render time on airborne + fastFalling + **positive vy**, so a held Down key does not carry dive echoes up a spring/stomp bounce. Show echoes immediately (no local fade ramp) at 0.6/0.36 opacity with 0.65�0.85 body-height spacing; short drops must read clearly in worker mode. Multiply inherited alpha and restore it. Pose echoes also work on slow devices without a gradient fallback.
+- Ordinary airborne oval afterimages and the faint white airborne lines are removed from this movement family. Preserve invincibility trails outside an active dive; do not stack generic speed blobs behind the selected clouds or pose echoes.
+- Foreground cover still occludes the effects. Use a clear contact surface for art review as well as a covered location to check draw order. The capture script seeds a clear ground position only in main-simulation mode, then uses real keyboard input; default-worker captures use real movement throughout.
+
 ### Particle Burst (Short-Lived)
 
 Use `this.emitParticle(x, y, vx, vy, life, size, color)` — pooled via free-list, auto-cleaned.
@@ -175,3 +191,23 @@ Music disable is centralized in `AudioManager.setMusicDisabled(bool)` — sets `
 ### Direct arena music and browser activation
 
 A direct `?arena=...` link can finish asynchronous loading after the browser's initial user activation expires. Arena MP3 autoplay may then fail silently until pause/unpause calls `playMusic()` again. `Howler.playing()` can report true after a blocked HTMLAudio attempt. Track arena `play`, `stop`, and `playerror` events, and distinguish a pending call from actual playback to avoid duplicate HTMLAudio instances. Retry inside the first subsequent key, pointer, or touch event, then remove those listeners when music plays or stops. `e2e/arena-music-gesture.spec.ts` forces a blocked attempt and checks the first movement key starts one track.
+
+Player transitions now tick at simulation cadence in `tickCosmetic`; the half-rate particle bucket skips the duplicate transition update. Direct `cosmeticStep` calls still detect transitions for tests and warmup. Contact pops should be visible on their first frame, with irregular jagged points, a warm inset, and detached flecks. Sharp edges are intended; avoid a plain symmetrical vector silhouette.
+
+Wall bonk selection: Squash only. Shared `WALL_BONK_SQUASH = 0.62` applies to platform walls and lobby boundaries; player pushes stay at 0.8. Recover horizontal compression in Simulator before platform collision every fixed step (same exponential recovery as lobby), so held contact stays stable and release returns to normal. The gallery uses a linear prototype recovery; the live game uses eased recovery. No new particles. Live practice: `/bunnybrawl/docs/mockups/wall-bonk/playtest.html`; `capture-live.mjs` verifies contact, held compression and complete release recovery against the real main simulation and renderer worker.
+
+Selected: Short recoil. Renderer-owned `BumpRecoil` detects a fresh 0.8 push squash beside another active body and gives both poses an outward four-pixel kick and small lean over 0.18 seconds. Direction comes from the touching body, not facing or velocity. Scale offset with player width. Never change physical positions, transport schemas, or wall squash; apply after drawing the shadow and before drawing the sprite. Holding contact must not restart the animation; reset on death. This works with worker and guest snapshots through the existing push marker. Live practice uses the real simulator with a stationary bot partner; fixture seeding is main-simulation only. Build, 149 focused Vitest tests, real collision browser capture, and four existing Playwright mode checks passed; full Vitest and full E2E suites not run.
+
+Selected combination: Bite burst + Leaf flick. Actual pickup replaces oval debris and gold circles with eight inked carrot chips (0.34s), five veined leaves (0.40s), and six short cream accents (0.22s). Spawn feedback is unchanged. Custom shapes travel through both structured cloning and SAB (shape IDs 5 and 6); keep the frozen baseline unchanged. Shapes hold full opacity briefly, then fade without shrinking into dots. Practice: `/bunnybrawl/docs/mockups/carrot-pickup/playtest.html`, with real main simulation and renderer worker; reset clears fat state and re-seeds one carrot. Build, 115 focused Vitest tests, live pickup/reset capture, and four existing Playwright checks covering both simulation modes passed. Full Vitest and full E2E suites not run.
+
+### Thorn Pain jolt
+
+Selected thorn hit: Pain jolt without side lightning bolts. Emit one stationary `thornJolt` inked cream/red impact with fourteen age-driven chips (0.48 seconds), replacing blood/wood emission; retain red slow-state pulse, flash, shake, hitstop and sound. Shape occupies the final three-bit SAB code 7; adding further shapes requires expanding the wire. Renderer-owned `ThornRecoil` identifies a newly set/refreshed five-second slow beside a fresh transported `thornJolt` particle (the consumed thorn is removed in the same tick) and applies a 0.4-second backward pose jolt; never alter physical coordinates. It must ignore unrelated slow sources and reset on death/respawn.
+
+### Cloud respawn entrance
+
+Selected spawn/respawn: three large stationary cream clouds for 0.55 s and eight bright gold/orange flecks clearing by 0.85 s. Keep original protection blink and INVINCIBLE_DURATION unchanged; replace spawn ring/light burst only. Draw reveal clouds after players and before platform overlays; attach to original spawn point, not moving player. Particle `respawnCloud` is SAB code 8, requiring four shape bits (24..27) and mask 15; byte layout unchanged. Both startup and invincibility-rise transitions use the same emitter; stomp light bursts remain enabled.
+
+### Lava Ember cough
+
+Selected Ember cough emits one stationary burnCough particle on a rising/refreshed burnTimer: two smoke chuffs 150 ms apart with ember cores, total 590 ms. Shape ID 9 survives four-bit SAB packing. Draw chuffs with the foreground entrance pass after players; exclude from generic gravity. Quiet player-following smoke uses the existing five-second burn timer and original warm glow, preserving hazard physics, sounds and impact feedback. Practice calls the real lava collision helper and cosmetic transition, never manually emits the cough. Reset must prime baselines before the lava hit. Build, lint, 185 focused Vitest tests and renderer-worker lava-hit/expiry/replay browser capture passed; both simulation modes booted, full E2E not run.

@@ -36,6 +36,7 @@ import { getEntities } from '../entities/registry';
 import type { EntityFixedCtx } from '../entities/types';
 import type { ScatterFlockSpecies } from '../themes/types';
 import { pickScatterColor } from '../rendering/hazards';
+import { normalizeCharacterScale } from '../characterScale';
 
 const f = Math.fround;
 
@@ -80,6 +81,7 @@ export class Simulator {
   private _effWalkSpeed: number;
   private _effJumpImpulse: number;
   private _effMaxFallSpeed: number;
+  private _characterScale: number;
 
   // PRNG (split into game + AI streams so AI conditional calls can't desync spawn RNG)
   private _rng?: SeededRNG;
@@ -159,6 +161,7 @@ export class Simulator {
     if (opts.rng) this._aiRng = new SeededRNG(opts.rng.getState() ^ 0x41495F52);
 
     this._settings = opts.settings;
+    this._characterScale = normalizeCharacterScale(opts.settings.characterScale);
     this._originalArena = opts.arena;
     this._theme = getTheme(opts.arena.themeId);
 
@@ -171,14 +174,16 @@ export class Simulator {
     }
     this._arena = effectiveArena;
 
-    const phys = computeEffectivePhysics(this._theme, opts.settings.mods);
+    const phys = computeEffectivePhysics(this._theme, opts.settings.mods, this._characterScale);
     this._effGravity = phys.gravity;
     this._effFriction = phys.friction;
     this._effWalkSpeed = phys.walkSpeed;
     this._effJumpImpulse = phys.jumpImpulse;
     this._effMaxFallSpeed = phys.maxFallSpeed;
 
-    const players = createInitialPlayers(opts.activePlayers, this._arena, opts.settings.mods.giantPlayers, this._boundGameRandom);
+    const players = createInitialPlayers(
+      opts.activePlayers, this._arena, opts.settings.mods.giantPlayers, this._boundGameRandom, this._characterScale,
+    );
 
     const botDifficulty = opts.settings.botDifficulty ?? 'medium';
     let botIndex = 0;
@@ -244,6 +249,7 @@ export class Simulator {
     this._effectZoneSystem = new EffectZoneSystem(
       this._state, this._arena, this._arenaEntitySystem,
       this._sfxCooldownsGetter, this._boundPlaySound, this._boundStopSound,
+      this._characterScale,
     );
   }
 
@@ -319,6 +325,7 @@ export class Simulator {
     if (settingsOverrides) {
       this._settings = { ...this._settings, ...settingsOverrides };
     }
+    this._characterScale = normalizeCharacterScale(this._settings.characterScale);
     let effectiveArena = newArena;
     if (this._settings.mods.superBounce) {
       effectiveArena = { ...effectiveArena, bouncyPlatforms: effectiveArena.platforms.map((_, i) => i) };
@@ -332,7 +339,7 @@ export class Simulator {
     }
     this._theme = getTheme(newArena.themeId);
 
-    const phys = computeEffectivePhysics(this._theme, this._settings.mods);
+    const phys = computeEffectivePhysics(this._theme, this._settings.mods, this._characterScale);
     this._effGravity = phys.gravity;
     this._effFriction = phys.friction;
     this._effWalkSpeed = phys.walkSpeed;
@@ -342,7 +349,9 @@ export class Simulator {
     const activePlayers = this._state.players.map(p => p.id);
     const fresh = createInitialMatchState(
       this._arena, this._theme, this._settings,
-      createInitialPlayers(activePlayers, this._arena, this._settings.mods.giantPlayers, this._boundGameRandom),
+      createInitialPlayers(
+        activePlayers, this._arena, this._settings.mods.giantPlayers, this._boundGameRandom, this._characterScale,
+      ),
       activePlayers, this._boundGameRandom,
     );
     Object.assign(this._state, fresh);
@@ -503,15 +512,20 @@ export class Simulator {
         const ai = this._aiControllers.get(player.id);
         if (ai) playerWalkSpeed *= ai.getWalkSpeedMult();
       }
-      applyInput(player, input, dt, playerWalkSpeed, this._effFriction, this._effJumpImpulse);
+      applyInput(player, input, dt, playerWalkSpeed, this._effFriction, this._effJumpImpulse, this._characterScale);
 
       if (!wasAirborne && player.state === 'airborne') {
         player.squashScale = STRETCH_ON_JUMP;
         player.squashTimer = 0.15;
       }
 
-      applyGravity(player, dt, this._effGravity, this._effMaxFallSpeed);
+      applyGravity(player, dt, this._effGravity, this._effMaxFallSpeed, this._characterScale);
       movePlayer(player, dt);
+      // Recover before contact so holding against a wall keeps a stable compression.
+      if (player.sideSquash !== 1) {
+        player.sideSquash = f(player.sideSquash + f(f(1 - player.sideSquash) * f(SQUASH_DECAY_SPEED * dt)));
+        if (Math.abs(player.sideSquash - 1) < 0.02) player.sideSquash = 1;
+      }
       collidePlatforms(player, this._arena.platforms);
       resolveStuckPlayer(player, this._arena.platforms);
       applyArenaConstraints(player, this._arena);
@@ -634,7 +648,7 @@ export class Simulator {
           const playerCx = player.x + player.width / 2;
           if (playerBottom >= bp.y && playerBottom <= bp.y + bp.height + 4 &&
               playerCx >= bp.x && playerCx <= bp.x + bp.width) {
-            player.vy = f(SPRING_BOUNCE * 0.85);
+            player.vy = f(SPRING_BOUNCE * 0.85 * this._characterScale);
             player.state = 'airborne';
             this._state.bouncyWobble.set(bi, 0.4);
             break;
@@ -750,16 +764,19 @@ export class Simulator {
     this._effectZoneSystem = new EffectZoneSystem(
       this._state, this._arena, this._arenaEntitySystem,
       this._sfxCooldownsGetter, this._boundPlaySound, this._boundStopSound,
+      this._characterScale,
     );
     this._playerCollisionSystem = new PlayerCollisionSystem(
       this._state, this._arena, this._boundParticleEmitter,
       () => this._resimulating,
+      this._characterScale,
     );
     this._stompSystem = new StompSystem(
       this._state, this._arena, this._settings,
       () => this._resimulating,
       () => this._rng,
       this._events.onStompHaptic,
+      this._characterScale,
     );
     this._matchSystem = new MatchSystem(
       this._state, this._settings, this._theme,

@@ -37,12 +37,12 @@ export interface HazardHitResult {
  * Spring collision — bounces the player upward.
  * Only fully grown springs (growTimer <= 0), not already bouncing (bounceTimer <= 0).
  */
-export function handleSpringCollision(player: Player, state: MatchState): HazardHitResult | null {
+export function handleSpringCollision(player: Player, state: MatchState, movementScale = 1): HazardHitResult | null {
   const springHit = checkSpringCollision(player, state.springs);
   if (!springHit) return null;
 
   const spring = state.springs[springHit.springIndex];
-  player.vy = SPRING_BOUNCE;
+  player.vy = f(SPRING_BOUNCE * movementScale);
   player.state = 'airborne';
   spring.bounceTimer = 0.3;
   player.springTrailTimer = SPRING_TRAIL_DURATION;
@@ -97,7 +97,7 @@ export function handleThornCollision(player: Player, state: MatchState): HazardH
  * Hazard zone collision (lava pools etc.) — inset hitbox by 12px on sides.
  * Slows player, applies burn timer for lava, knockback + damage flash.
  */
-export function handleHazardZoneCollision(player: Player, arena: Arena): HazardHitResult | null {
+export function handleHazardZoneCollision(player: Player, arena: Arena, movementScale = 1): HazardHitResult | null {
   if (!arena.hazardZones) return null;
 
   const hzHit = checkHazardZoneCollision(player, arena.hazardZones);
@@ -109,8 +109,8 @@ export function handleHazardZoneCollision(player: Player, arena: Arena): HazardH
   // thornhit sound fired by cosmeticStep via slowTimer transition detection
 
   // Knockback away from hazard center
-  player.vx = f(player.vx + hzHit.knockbackDir * 150);
-  player.vy = -200;
+  player.vx = f(player.vx + hzHit.knockbackDir * 150 * movementScale);
+  player.vy = f(-200 * movementScale);
   player.damageFlashSide = hzHit.knockbackDir > 0 ? 'left' : 'right';
   player.damageFlashTimer = 0.4;
   player.squashScale = 0.6;
@@ -132,7 +132,7 @@ export function handleHazardZoneCollision(player: Player, arena: Arena): HazardH
 /**
  * Ghost collision — slows the player, knockback + damage flash.
  */
-export function handleGhostCollision(player: Player, state: MatchState): HazardHitResult | null {
+export function handleGhostCollision(player: Player, state: MatchState, movementScale = 1): HazardHitResult | null {
   const ghostHit = checkGhostCollision(player, state.ghosts);
   if (!ghostHit) return null;
 
@@ -140,8 +140,8 @@ export function handleGhostCollision(player: Player, state: MatchState): HazardH
   // thornhit sound fired by cosmeticStep via slowTimer transition detection
 
   // Knockback away from ghost
-  player.vx = f(player.vx + ghostHit.knockbackDir * 180);
-  player.vy = -180;
+  player.vx = f(player.vx + ghostHit.knockbackDir * 180 * movementScale);
+  player.vy = f(-180 * movementScale);
   player.damageFlashSide = ghostHit.knockbackDir > 0 ? 'left' : 'right';
   player.damageFlashTimer = 0.4;
   player.squashScale = 0.6;
@@ -161,7 +161,7 @@ export function handleGhostCollision(player: Player, state: MatchState): HazardH
 /**
  * Lava rock collision — deactivates the rock, slows the player, knockback + damage flash.
  */
-export function handleLavaRockCollision(player: Player, state: MatchState): HazardHitResult | null {
+export function handleLavaRockCollision(player: Player, state: MatchState, movementScale = 1): HazardHitResult | null {
   const rockHit = checkLavaRockCollision(player, state.lavaRocks);
   if (!rockHit) return null;
 
@@ -170,8 +170,8 @@ export function handleLavaRockCollision(player: Player, state: MatchState): Haza
   player.slowTimer = THORN_SLOW_DURATION;
   // thornhit sound fired by cosmeticStep via slowTimer transition detection
 
-  player.vx = f(player.vx + (rockHit.knockbackDir > 0 ? -120 : 120));
-  player.vy = -150;
+  player.vx = f(player.vx + (rockHit.knockbackDir > 0 ? -120 : 120) * movementScale);
+  player.vy = f(-150 * movementScale);
   player.damageFlashSide = rockHit.knockbackDir > 0 ? 'left' : 'right';
   player.damageFlashTimer = 0.3;
   player.squashScale = 0.65;

@@ -140,10 +140,19 @@ export function drawHill(ctx: Ctx2D, x: number, baseY: number, width: number, he
 export function drawCloud(ctx: Ctx2D, x: number, y: number, size: number, color = 'rgba(255, 255, 255, 0.7)'): void {
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
-  ctx.arc(x + size * 0.4, y - size * 0.15, size * 0.4, 0, Math.PI * 2);
-  ctx.arc(x + size * 0.8, y, size * 0.45, 0, Math.PI * 2);
-  ctx.arc(x + size * 0.35, y + size * 0.1, size * 0.35, 0, Math.PI * 2);
+  appendCloudPath(ctx, x - size * .5, y - size * .45, size * 1.75, size);
   ctx.fill();
+}
+
+/** Connected, asymmetric billows; can be appended to a batched cloud path. */
+export function appendCloudPath(c: Ctx2D, x: number, y: number, w: number, h: number): void {
+  c.moveTo(x, y + h * .62);
+  c.bezierCurveTo(x - w * .02, y + h * .35, x + w * .1, y + h * .19, x + w * .25, y + h * .3);
+  c.bezierCurveTo(x + w * .28, y - h * .06, x + w * .53, y - h * .08, x + w * .58, y + h * .23);
+  c.bezierCurveTo(x + w * .72, y + h * .09, x + w * .85, y + h * .26, x + w * .85, y + h * .41);
+  c.bezierCurveTo(x + w * 1.04, y + h * .36, x + w * 1.07, y + h * .7, x + w * .92, y + h * .78);
+  c.bezierCurveTo(x + w * .7, y + h * .9, x + w * .56, y + h * .77, x + w * .4, y + h * .85);
+  c.bezierCurveTo(x + w * .22, y + h * .92, x + w * .03, y + h * .87, x, y + h * .62);
+  c.closePath();
 }
 

@@ -26,7 +26,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
     let p = this._scratchPrev.get(player.id);
     if (!p) {
       p = {
-        state: 'idle', vx: 0, vy: 0, score: 0,
+        state: 'idle', vx: 0, vy: 0, footY: 0, score: 0,
         fatTimer: 0, sideSquash: 1,
         burnTimer: 0, slowTimer: 0, invincibleTimer: 0,
         fastFalling: false, springTrailTimer: 0,
@@ -36,6 +36,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
     p.state = player.state;
     p.vx = player.vx;
     p.vy = player.vy;
+    p.footY = player.y + player.height;
     p.score = player.score;
     p.fatTimer = player.fatTimer;
     p.sideSquash = player.sideSquash;
@@ -72,15 +73,16 @@ export class PlayerTransitionSystem implements CosmeticSystem {
     this.particleSystem = particleSystem;
 
     this.callbacks = {
+      spawnBurnVFX: p => this.particleSystem.spawnBurnCough(p),
       playSound: this.playSound,
       playAnimal: this.playAnimal,
-      spawnDustParticles: (p, vy) => this.particleSystem.spawnDustParticles(p, vy),
-      spawnJumpDustParticles: (p) => { if (!getSlowDevice()) this.particleSystem.spawnJumpDustParticles(p); },
+      spawnDustParticles: (p, vy, fastStomp) => this.particleSystem.spawnDustParticles(p, vy, fastStomp),
+      spawnJumpDustParticles: (p, launchY) => { if (!getSlowDevice()) this.particleSystem.spawnJumpDustParticles(p, launchY); },
       spawnKillSplatter: (v) => this.particleSystem.spawnKillSplatter(v, this.settings),
       pickupCarrotVFX: (x, y) => this.particleSystem.pickupCarrotVFX(x, y),
-      spawnPlayerSpawnVFX: (x, y) => this.particleSystem.spawnRingVFX(x, y),
+      spawnPlayerSpawnVFX: (x, y) => this.particleSystem.spawnPlayerEntrance(x, y),
       onStomp,
-      lightBurst,
+      lightBurst: (x, y, kind) => { if (kind === 'stomp') lightBurst?.(x, y, kind); },
     };
   }
 

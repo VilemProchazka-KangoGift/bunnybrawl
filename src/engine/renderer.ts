@@ -1,3 +1,6 @@
+import { ThornRecoil } from './rendering/thornRecoil';
+import { CeilingSquash } from './rendering/ceilingSquash';
+import { BumpRecoil } from './rendering/bumpRecoil';
 import type { Arena, MatchState, Particle, Platform, Player, PlayerSlot, Gib, Ctx2D } from './types';
 import type { ThemeConfig } from './themes/types';
 import { aabbOverlap } from './physics';
@@ -8,7 +11,7 @@ import {
   HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
 import {
-  drawHill,
+  drawHill, appendCloudPath,
   capFrontY, capBackY, skewPx,
 } from './themes/drawPrimitives';
 import { hexToHSL } from './fastMath';
@@ -22,9 +25,9 @@ import { drawFpsCounter } from './fpsCounter';
 // Extracted rendering modules
 import {
   drawCarrot, drawSpringMushroom, drawThorn,
-  drawWeather, drawParticles, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail,
+  drawRespawnEntrances, drawWeather, drawParticles, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay,
-  drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
+  drawSkyCycle, drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
   drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
@@ -383,6 +386,9 @@ export class Renderer implements IRenderer {
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
   private theme: ThemeConfig;
+  private readonly thornRecoil = new ThornRecoil();
+  private readonly ceilingSquash = new CeilingSquash();
+  private readonly bumpRecoil = new BumpRecoil();
   private frameTime = 0; // cached performance.now() per frame
 
   /** Reused entity-draw ctx — entities MUST NOT mutate. Fields overwritten
@@ -1076,12 +1082,7 @@ export class Renderer implements IRenderer {
       }
       return;
     }
-    // Inlined batch of theme-default clouds: one fillStyle, one beginPath/fill
-    // for all clouds. Each cloud is 4 overlapping arcs (the original drawCloud
-    // shape); moveTo before each cloud starts a new sub-path so neighbours
-    // don't connect with a stray line. (The drawCloud primitive in
-    // drawPrimitives is still used by menu + lobby renderers — those aren't
-    // hot enough to justify duplicating this batch path there.)
+    // Shared silhouette, batched into one fill for all default clouds.
     ctx.fillStyle = this.theme.clouds.color;
     ctx.beginPath();
     for (const cloud of this.clouds) {
@@ -1090,11 +1091,7 @@ export class Renderer implements IRenderer {
         cloud.x = -cloud.size * 2;
       }
       const x = cloud.x, y = cloud.y, s = cloud.size;
-      ctx.moveTo(x + s * 0.5, y);
-      ctx.arc(x, y, s * 0.5, 0, Math.PI * 2);
-      ctx.arc(x + s * 0.4, y - s * 0.15, s * 0.4, 0, Math.PI * 2);
-      ctx.arc(x + s * 0.8, y, s * 0.45, 0, Math.PI * 2);
-      ctx.arc(x + s * 0.35, y + s * 0.1, s * 0.35, 0, Math.PI * 2);
+      appendCloudPath(ctx, x - s * .5, y - s * .45, s * 1.75, s);
     }
     ctx.fill();
   }
@@ -1207,6 +1204,10 @@ export class Renderer implements IRenderer {
       const bgStart = perfTrace.begin('render.bg');
       const slow = getSlowDevice();
 
+      if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
+        drawSkyCycle(ctx, matchState.dayPhase, this.frameTime);
+      }
+
       // Drawn before clouds so sky-atmosphere effects (aurora, distant space
       // objects) compose under weather and clouds.
       if (this.theme.drawAnimatedBackground) {
@@ -1254,7 +1255,10 @@ export class Renderer implements IRenderer {
           if (zone.type === 'zero_g') {
             drawZeroGZone(ctx, zone, matchState.timeElapsed);
           } else if (zone.type === 'current') {
-            drawCurrentZone(ctx, zone, matchState.timeElapsed);
+            // Waterfall water starts at the painted rock lip; the force zone
+            // still starts at y=160 and keeps its existing collision bounds.
+            const sourceY = this.theme.id === 'waterfall' && zone.vy ? 65 : undefined;
+            drawCurrentZone(ctx, zone, matchState.timeElapsed, sourceY);
           } else if (zone.type === 'geyser') {
             const gs = matchState.geyserStates[geyserIdx];
             if (gs) drawGeyser(ctx, zone, gs, matchState.timeElapsed);
@@ -1315,6 +1319,8 @@ export class Renderer implements IRenderer {
         for (const player of matchState.players) {
           if (!player.active) continue;
           if (player.state === 'respawning') continue;
+          // Movement uses cloud puffs / attack-pose echoes, not oval blobs.
+          if (player.state === 'airborne' && (player.invincibleTimer <= 0 || (player.fastFalling && player.vy >= 0))) continue;
           const afterimages = player.afterimages;
           if (afterimages && afterimages.length > 0) {
             d.afterimages = true;
@@ -1372,6 +1378,12 @@ export class Renderer implements IRenderer {
       const useIsoClip = this._arenaHasIsoOccluders;
       const isoPlatforms = this._isoOccluderPlatforms;
       for (const player of matchState.players) {
+        const entrance = particles.find(p => p.shape === 'respawnCloud' && p.maxLife - p.life + cosmeticLead < .2
+          && Math.abs(p.x - player.x - player.width / 2) < player.width * .5
+          && Math.abs(p.y - player.y - player.height / 2) < player.height * .5);
+        const entrancePulse = entrance ? Math.max(0, 1 - (entrance.maxLife - entrance.life + cosmeticLead) / .2) : 0;
+        const thornPulse = this.thornRecoil.sample(player, particles, this.frameTime);
+        const ceilingPulse = this.ceilingSquash.pulse(player, arena.platforms, this.frameTime);
         if (!player.active) continue;
         if (player.state === 'respawning') continue;
         const occluders = useIsoClip ? findIsoOccluders(player, isoPlatforms) : null;
@@ -1383,10 +1395,12 @@ export class Renderer implements IRenderer {
           for (const plat of occluders!) addIsoPlatformPath(ctx, plat);
           ctx.clip('evenodd');
         }
-        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime);
+        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime, this.bumpRecoil.offset(player, matchState.players, this.frameTime), ceilingPulse, thornPulse, entrancePulse);
         if (clipped) ctx.restore();
         d.playersDrawn++;
       }
+
+      drawRespawnEntrances(ctx, particles, cosmeticLead);
 
       // Platform body overlay (cached). Drawn AFTER players so the body face
       // occludes any player whose bbox enters the iso phantom strip — the
@@ -1397,7 +1411,7 @@ export class Renderer implements IRenderer {
         ctx.drawImage(this._overlayCanvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       }
 
-      // Spring spiral trail (h) -- drawn near players
+      // Spring boing accents -- anchored at the launch mushroom
       for (const player of matchState.players) {
         if (!player.active || player.state === 'respawning') continue;
         if (player.springTrailTimer > 0) {
@@ -1486,7 +1500,7 @@ export class Renderer implements IRenderer {
         d.fireworks = true;
       }
 
-      // Day/night cycle overlay (only if theme has it enabled)
+      // Foreground fireflies and shooting stars (sky bodies were drawn before clouds)
       if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
         drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
         d.dayNight = true;

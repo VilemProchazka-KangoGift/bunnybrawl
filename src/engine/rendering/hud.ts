@@ -177,7 +177,8 @@ function _drawHUDImpl(ctx: Ctx2D, state: MatchState, _frameTime: number, playerN
     ctx.fillStyle = UI_THEME.ink; ctx.beginPath(); ctx.roundRect(0, 26, scoreWidth - 10, 46, 12); ctx.fill();
     ctx.fillStyle = player.character.lightColor; ctx.strokeStyle = UI_THEME.ink; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.roundRect(0, 21, scoreWidth - 10, 46, 12); ctx.fill(); ctx.stroke();
-    const portraitSize = compact ? 45 : 78;
+    // Leave headroom for ticket tilt and the 6% goal pulse; keep feet at y=67.
+    const portraitSize = compact ? 45 : 60;
     drawUiPortrait(ctx, player.character.name, -5, 67 - portraitSize, portraitSize);
     const textX = compact ? 40 : 85;
     const customName = playerNames?.[player.id];

@@ -2,7 +2,7 @@ import type { Player, Platform, Arena } from './types';
 import {
   GRAVITY, MAX_WALK_SPEED, ACCELERATION, FRICTION,
   JUMP_IMPULSE, MAX_FALL_SPEED, FAST_FALL_GRAVITY, FAST_FALL_SPEED,
-  FAST_FALL_INITIAL, PLAYER_PUSH_FORCE,
+  FAST_FALL_INITIAL, PLAYER_PUSH_FORCE, WALL_BONK_SQUASH,
   FAT_SPEED_MULT, FAT_JUMP_MULT, THORN_SPEED_MULT, THORN_JUMP_MULT,
 } from './constants';
 import type { InputState } from './types';
@@ -56,7 +56,7 @@ export function getJumpMult(player: Player): number {
 
 export function applyInput(
   player: Player, input: InputState, dt: number,
-  maxWalkSpeed = MAX_WALK_SPEED, friction = FRICTION, jumpImpulse = JUMP_IMPULSE,
+  maxWalkSpeed = MAX_WALK_SPEED, friction = FRICTION, jumpImpulse = JUMP_IMPULSE, movementScale = 1,
 ): void {
   if (player.state === 'splat' || player.state === 'respawning') return;
 
@@ -65,10 +65,10 @@ export function applyInput(
 
   // Horizontal movement
   if (input.left) {
-    player.vx = f(player.vx - f(ACCELERATION * dt));
+    player.vx = f(player.vx - f(ACCELERATION * movementScale * dt));
     player.facing = 'left';
   } else if (input.right) {
-    player.vx = f(player.vx + f(ACCELERATION * dt));
+    player.vx = f(player.vx + f(ACCELERATION * movementScale * dt));
     player.facing = 'right';
   } else {
     if (player.vx > 0) {
@@ -89,7 +89,7 @@ export function applyInput(
   player.downHeld = input.down;
   if (input.down && player.state === 'airborne') {
     if (!player.fastFalling && (downPressed || player.vy >= 0)) {
-      player.vy = f(Math.max(player.vy, FAST_FALL_INITIAL));
+      player.vy = f(Math.max(player.vy, FAST_FALL_INITIAL * movementScale));
     }
     player.fastFalling = true;
   } else {
@@ -103,11 +103,11 @@ export function applyInput(
   }
 }
 
-export function applyGravity(player: Player, dt: number, gravity = GRAVITY, maxFallSpeed = MAX_FALL_SPEED): void {
+export function applyGravity(player: Player, dt: number, gravity = GRAVITY, maxFallSpeed = MAX_FALL_SPEED, movementScale = 1): void {
   if (player.state === 'splat' || player.state === 'respawning') return;
 
-  const g = player.fastFalling ? FAST_FALL_GRAVITY : gravity;
-  const maxFall = player.fastFalling ? FAST_FALL_SPEED : maxFallSpeed;
+  const g = player.fastFalling ? FAST_FALL_GRAVITY * movementScale : gravity;
+  const maxFall = player.fastFalling ? FAST_FALL_SPEED * movementScale : maxFallSpeed;
 
   player.vy = f(player.vy + f(g * dt));
   player.vy = f(Math.min(player.vy, maxFall));
@@ -192,11 +192,11 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
         // Side bonk left — clamped to the inset wall, not raw plat.x.
         if (pastBonkWall) {
           player.x = bonkLeftX - player.width;
-          if (player.vx > 0) { player.sideSquash = 0.75; player.vx = 0; }
+          if (player.vx > 0) { player.sideSquash = WALL_BONK_SQUASH; player.vx = 0; }
         }
       } else if (minDir === 1) {
         player.x = plat.x + plat.width;
-        if (player.vx < 0) { player.sideSquash = 0.75; player.vx = 0; }
+        if (player.vx < 0) { player.sideSquash = WALL_BONK_SQUASH; player.vx = 0; }
       } else {
         // Fallback for tied/sign-conflicting cases: minDir===2 with overlapTop===overlapBottom
         // (top branch's strict-less-than fails) and minDir===3 with vy>=0 (head bump's vy<0 fails).
@@ -249,9 +249,9 @@ export function aabbOverlap(
   return ax < f(bx + bw) && f(ax + aw) > bx && ay < f(by + bh) && f(ay + ah) > by;
 }
 
-export function collidePlayersHorizontal(players: Player[]): void {
+export function collidePlayersHorizontal(players: Player[], movementScale = 1): void {
   // Small inset so sprites visually touch before the wall kicks in
-  const margin = 4;
+  const margin = 4 * movementScale;
 
   for (let i = 0; i < players.length; i++) {
     const a = players[i];
@@ -291,8 +291,8 @@ export function collidePlayersHorizontal(players: Player[]): void {
 
           // Velocity exchange: transfer momentum
           const avgVx = f((a.vx + b.vx) / 2);
-          a.vx = f(avgVx - f(PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3)));
-          b.vx = f(avgVx + f(PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3)));
+          a.vx = f(avgVx - f(PLAYER_PUSH_FORCE * movementScale * (aCx <= bCx ? 0.3 : -0.3)));
+          b.vx = f(avgVx + f(PLAYER_PUSH_FORCE * movementScale * (aCx <= bCx ? 0.3 : -0.3)));
           // Side squash both characters on push
           a.sideSquash = 0.8;
           b.sideSquash = 0.8;

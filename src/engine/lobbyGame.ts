@@ -5,7 +5,7 @@
 import type { Arena, CharacterDef, CharacterSlot, MatchState, Particle, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
 import type { ThemeConfig } from './themes/types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, DUST_LAND_VY_THRESHOLD } from './constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, WALL_BONK_SQUASH, DUST_LAND_VY_THRESHOLD } from './constants';
 import {
   spawnJumpDustParticles, spawnDustParticles, spawnFootstepDustParticles, updateParticles,
 } from './gameLoop/cosmetics/particles';
@@ -25,16 +25,17 @@ import {
   LOBBY_GRAVITY, LOBBY_SPEED, LOBBY_JUMP,
   WALL_X,
 } from './lobbyConstants';
+import { normalizeCharacterScale } from './characterScale';
 import { botLobbyInput, wanderInput } from './lobbyBots';
 
 export { READY_ZONE_X } from './lobbyConstants';
 
-function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: number): Player {
+function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: number, scale: number): Player {
   return {
     id: slot,
     character: { ...char, slot },
     x, y, vx: 0, vy: 0,
-    width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
+    width: PLAYER_WIDTH * scale, height: PLAYER_HEIGHT * scale,
     state: 'idle', facing: 'right',
     splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
     score: 0, active: true,
@@ -54,11 +55,11 @@ function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: num
 function clampLobbyBounds(p: Player): void {
   // Horizontal clamp (NOT wrap — we don't want players teleporting across the canvas)
   if (p.x < 0) {
-    if (p.vx < 0) p.sideSquash = 0.75;
+    if (p.vx < 0) p.sideSquash = WALL_BONK_SQUASH;
     p.x = 0;
     p.vx = 0;
   } else if (p.x + p.width > CANVAS_WIDTH) {
-    if (p.vx > 0) p.sideSquash = 0.75;
+    if (p.vx > 0) p.sideSquash = WALL_BONK_SQUASH;
     p.x = CANVAS_WIDTH - p.width;
     p.vx = 0;
   }
@@ -99,6 +100,7 @@ function buildLobbyMatchState(theme: ThemeConfig): MatchState {
 export interface LobbyGameConfig {
   botCount: number;
   isMobile: boolean;
+  characterScale?: number;
 }
 
 export class LobbyGame {
@@ -106,6 +108,7 @@ export class LobbyGame {
   // - Bot speed: all bots walk at LOBBY_SPEED (pre-refactor varied 119-200 px/s per slot).
   // - Stomp splat visual: X-eyed splat (drawPlayer → drawSplatCharacter). Was a flat ellipse.
   // - Character shadows: drawn under all entities (drawPlayer adds them). Was no shadow.
+  readonly characterScale: number;
   players: Player[] = [];
   bots: Player[] = [];
   extraChars: Player[] = [];
@@ -150,6 +153,7 @@ export class LobbyGame {
   private _dustColor: string;
 
   constructor(config: LobbyGameConfig) {
+    const scale = this.characterScale = normalizeCharacterScale(config.characterScale);
     const botCount = config.botCount;
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
     const theme = getTheme('lobby');
@@ -168,16 +172,16 @@ export class LobbyGame {
     const extras = shuffled.slice(activeSlots.length + botCount);
 
     this.players = activeSlots.map((slot, i) =>
-      makeLobbyPlayer(slot, assigned[i], 40 + i * 90, GROUND_Y - PLAYER_HEIGHT)
+      makeLobbyPlayer(slot, assigned[i], 40 + i * 90, GROUND_Y - PLAYER_HEIGHT * scale, scale)
     );
 
     this.bots = botSlots.map((slot, i) =>
-      makeLobbyPlayer(slot, botAssigned[i], 40 + (SLOTS.length + i) * 60, GROUND_Y - PLAYER_HEIGHT)
+      makeLobbyPlayer(slot, botAssigned[i], 40 + (SLOTS.length + i) * 60, GROUND_Y - PLAYER_HEIGHT * scale, scale)
     );
 
     // NPC extras all carry a dummy id='P1'. Filter via `_extrasSet.has(entity)`, NEVER by id.
     this.extraChars = extras.map((ch) => {
-      const p = makeLobbyPlayer('P1' as CharacterSlot, ch, 40 + Math.random() * (WALL_X - 80), GROUND_Y - PLAYER_HEIGHT);
+      const p = makeLobbyPlayer('P1' as CharacterSlot, ch, 40 + Math.random() * (WALL_X - 80), GROUND_Y - PLAYER_HEIGHT * scale, scale);
       p.vx = (Math.random() - 0.5) * 60;
       p.facing = Math.random() > 0.5 ? 'right' : 'left';
       return p;
@@ -213,9 +217,10 @@ export class LobbyGame {
 
       const prev = this._prevState.get(p);
       const prevState = prev?.state ?? p.state;
+      const prevFootY = p.y + p.height;
       const prevVy = prev?.vy ?? p.vy;
 
-      applyInput(p, input, dt, LOBBY_SPEED, 1500 /* friction */, LOBBY_JUMP);
+      applyInput(p, input, dt, LOBBY_SPEED * this.characterScale, 1500 * this.characterScale, LOBBY_JUMP * this.characterScale, this.characterScale);
 
       // Passive facing sync — applyInput only sets facing on directional input;
       // coast velocity (bumps, stomps, initial NPC vx) needs its own sync.
@@ -224,7 +229,7 @@ export class LobbyGame {
         else if (p.vx < 0) p.facing = 'left';
       }
 
-      applyGravity(p, dt, LOBBY_GRAVITY, 800);
+      applyGravity(p, dt, LOBBY_GRAVITY * this.characterScale, 800 * this.characterScale, this.characterScale);
       movePlayer(p, dt);
       collidePlatforms(p, this.getArena().platforms);
       clampLobbyBounds(p);
@@ -234,13 +239,13 @@ export class LobbyGame {
       const wasGrounded = prevState !== 'airborne';
       const isAirborne = p.state === 'airborne';
       if (wasGrounded && isAirborne && input.jump) {
-        spawnJumpDustParticles(this._particles, this._particleFreeList, p);
+        spawnJumpDustParticles(this._particles, this._particleFreeList, p, prevFootY);
       }
       if (!wasGrounded && !isAirborne && Math.abs(prevVy) >= DUST_LAND_VY_THRESHOLD) {
         spawnDustParticles(this._particles, this._particleFreeList, p, Math.abs(prevVy), this._dustColor);
       }
       if (p.state === 'run') {
-        const speedRatio = Math.min(Math.abs(p.vx) / LOBBY_SPEED, 1);
+        const speedRatio = Math.min(Math.abs(p.vx) / (LOBBY_SPEED * this.characterScale), 1);
         const interval = 0.22 - speedRatio * 0.12;
         if (this._footstepAccs.advance(p, dt, interval)) {
           spawnFootstepDustParticles(this._particles, this._particleFreeList, p);
@@ -348,13 +353,13 @@ export class LobbyGame {
         if (victim.splatTimer > 0) continue;
         if (attackerIsBot && !this._extrasSet.has(victim)) continue;
 
-        if (isStomping(attacker, victim)) {
+        if (isStomping(attacker, victim, this.characterScale)) {
           const tempChar = attacker.character;
           attacker.character = { ...victim.character, slot: attacker.id };
           victim.character = { ...tempChar, slot: victim.id };
           victim.splatTimer = 0.8;
           victim.state = 'splat';
-          attacker.vy = -300;
+          attacker.vy = -300 * this.characterScale;
           audio.play('stomp');
 
           const isNPC = this._extrasSet.has(victim);
@@ -368,7 +373,7 @@ export class LobbyGame {
             }
             if (bestDist < 200 && WALL_X > 200) bestX = attacker.x > WALL_X / 2 ? 40 : WALL_X - 60;
             victim.x = bestX;
-            victim.y = GROUND_Y - PLAYER_HEIGHT;
+            victim.y = GROUND_Y - victim.height;
             victim.vx = 0;
             victim.vy = 0;
             victim.state = 'idle';
@@ -383,7 +388,7 @@ export class LobbyGame {
     this._humanInZoneCount = 0;
     this._botInZoneCount = 0;
     for (const p of this._participants) {
-      if (p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0) {
+      if (p.x + p.width > READY_ZONE_X && p.splatTimer <= 0) {
         this._inZoneCount++;
         if (isBotSlot(p.id)) this._botInZoneCount++;
         else this._humanInZoneCount++;
@@ -419,10 +424,10 @@ export class LobbyGame {
     // directly so this works even before the first update() call.
     const result: Player[] = [];
     for (const p of this.players) {
-      if (p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0) result.push(p);
+      if (p.x + p.width > READY_ZONE_X && p.splatTimer <= 0) result.push(p);
     }
     for (const b of this.bots) {
-      if (b.x + PLAYER_WIDTH > READY_ZONE_X && b.splatTimer <= 0) result.push(b);
+      if (b.x + b.width > READY_ZONE_X && b.splatTimer <= 0) result.push(b);
     }
     return result;
   }

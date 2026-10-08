@@ -77,6 +77,10 @@ legStyle?: {
 
 ## Lessons Learned
 
+### Frog pose consistency
+
+Use the standing frog as the anatomy reference for its eight painted poses: preserve head width, eye spacing, torso volume, limb thickness, foot size, and outline weight while changing joint angles and expressions. Seated and stomp silhouettes should not become a larger, heavier frog. Update `docs/mockups/character-roster-expressive/frog-expressive-atlas.png` and its 384×192 runtime WebP together; the source uses 480×480 cells. Check all eight cells side by side and verify loading and clipping in both worker modes.
+
 ### Expressive Pocket Plush runtime
 
 The [playable roster](../../../docs/mockups/playable-plush-roster/README.md) uses eight authored beats per animal: idle, alternating walk contacts, jump, sit, fast stomp, landing, and attention. `plush/playableRoster.ts` maps physics and idle-action state to those beats; species differences are drawn in each sheet. Keep authored poses out of the old body lean and squash transforms, while preserving the small seated movement sway. Runtime sheets are generated from the approved high-resolution studies by `scripts/generatePlayablePlush.py` at 96 pixels per cell and WebP quality 88, retaining at least 2x displayed resolution. Keep the source sheets and generated files in sync. Authored ears, horns, tails, and quills can extend beyond the 32-pixel collision box, so the sprite cache uses 16 pixels of padding for these packs. Verify at actual match size in both default sim-worker and `?simWorker=off` modes; a concept-sheet preview does not establish that game rendering or loading works.
@@ -110,3 +114,9 @@ The `?pocketBunny=1` prototype now uses a 10-pose, 4× game-resolution atlas: or
 Pack source art lives in `docs/mockups/character-styles/v3/` through `v5/`; `packPocketBunnyAtlas.mjs` exports the roughly 357 KB game atlas. Avoid decoding full concept sheets and building high-resolution OffscreenCanvas silhouettes at every startup. Compare cold start as well as warmed frame cost in both worker modes, and keep browser audio gestures separate from render timing when evaluating perceived sluggishness. Decode the atlas before worker setup completes, and replay arena setup messages received during async loading or the background can stay black.
 
 For fast stomp, expression alone is too subtle at match scale. Use a dedicated silhouette and pose: swept ears, fists near the face, joined downward feet, narrowed eyes, and an angry mouth. Match the other pose widths after packing: the same round-bodied artwork looked oversized at 36 game pixels and fits the jump pose at 32. Compare the atlas and a live crop before choosing the final scale; shrinking all anatomy in a new painting can make the torso too narrow. The selected source is `docs/mockups/character-styles/v5/angry-fast-stomp-chubby-source.png` and replaces only pose 8. Fixed-position generic angry eyebrows drift across authored head shapes and seated wobble; let the authored face carry its own expression and suppress that overlay for this pack.
+
+### Shared gameplay size experiments
+
+`MatchSettings.characterScale` is the base gameplay scale (default 1, first comparison range 1–1.5). Normalize through `engine/characterScale.ts`. Multiply collision dimensions and all movement velocities/accelerations by the same scale to preserve time while changing travel distances and jump height. Keep Giant Players and temporary power-ups separate. Lobby ready checks and labels must use each player's actual width/height, never the 32px constants. The jump tutorial wall remains solid at all tested scales.
+
+Authored plush atlas rendering uses `size * h / 32` around the existing foot anchor. Sprite-cache padding grows with body dimensions, and cache hits check backing-store dimensions before reusing a bitmap. Otherwise a warmed 32px pose can silently appear at the wrong size or clip appendages in a larger lobby. Check both simulation worker modes and an arena change; `e2e/character-scale.spec.ts` covers this path. The playable production-renderer study and matched day/night captures live in `docs/mockups/lobby-scale/`.

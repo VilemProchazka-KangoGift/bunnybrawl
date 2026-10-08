@@ -6,6 +6,24 @@ afterEach(() => {
 });
 
 describe('illustrated arena backdrop preload', () => {
+  it.each(['rooftops', 'treetops', 'waterfall', 'volcano', 'castle',
+    'haunted_graveyard', 'candy_land', 'underwater', 'space_station'])(
+    'loads only the selected %s plate and leaves unrelated images undecoded', async (arenaId) => {
+      const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => new Blob(['plate']) }));
+      const bitmap = { width: 1280, height: 720 } as ImageBitmap;
+      vi.stubGlobal('fetch', fetchMock);
+      vi.stubGlobal('createImageBitmap', vi.fn(async () => bitmap));
+      const art = await import('./illustratedBackdropAsset');
+      await art.prefetchIllustratedBackdrop(arenaId);
+      await art.preloadIllustratedBackdrop(arenaId);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][0]).toContain(`${arenaId.replaceAll('_', '-')}-painted.webp`);
+      expect(art.getIllustratedBackdrop(arenaId)).toBe(bitmap);
+      expect(art.getIllustratedBackdrop('meadow')).toBeNull();
+      expect(art.getIllustratedBackdrop('winter_lake')).toBeNull();
+    },
+  );
+
   it('reuses the lobby fetch and decodes only once for concurrent match requests', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => new Blob(['image']) }));
     const bitmap = { width: 1280, height: 720 } as ImageBitmap;
@@ -66,7 +84,7 @@ describe('illustrated arena backdrop preload', () => {
     const art = await import('./illustratedBackdropAsset');
     await art.prefetchIllustratedBackdrop('winter_lake');
     await art.preloadIllustratedBackdrop('winter_lake');
-    await art.prefetchIllustratedBackdrop('rooftops');
+    await art.prefetchIllustratedBackdrop('lobby');
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([

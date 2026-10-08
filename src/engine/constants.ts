@@ -71,6 +71,8 @@ export const HITSTOP_ZOOM = 0.03;      // 3% camera zoom punch during hitstop
 export const HAZARD_HITSTOP_DURATION = HITSTOP_DURATION * 0.5; // ~3.5 frames — brief freeze on hazard hits
 
 // Squash/stretch
+// Shared wall-contact deformation; player pushes retain their 0.8 squash.
+export const WALL_BONK_SQUASH = 0.62;
 export const SQUASH_ON_LAND = 0.7;     // squash scale on landing
 export const STRETCH_ON_JUMP = 1.3;     // stretch scale on jump
 export const SQUASH_ON_CROUCH = 0.6;    // squash when pressing down on ground
@@ -88,6 +90,9 @@ export const MATCH_COUNTDOWN = 3;       // seconds before match starts
 export const IDLE_FIRST_DELAY  = 0.8;   // seconds standing still before first idle action
 export const IDLE_REST_MIN     = 0.6;   // min seconds between idle actions
 export const IDLE_REST_MAX     = 1.4;   // max seconds between idle actions
+
+// Cartoon movement contact palette
+export const MOVEMENT_PUFF_COLOR = '#FFF3D5';
 
 // Shockwave
 export const SHOCKWAVE_MAX_RADIUS = 60;
