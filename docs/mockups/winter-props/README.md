@@ -1,6 +1,6 @@
 # Winter Lake props and cover: redesign step 4
 
-The selected Pearl background and Astra Canvas platforms are held fixed in every capture. This pass explores decorative props only: the large snowman and igloo, ground and shelf evergreens, smaller snowmen, the foreground snowball pile, and the two ground bushes. The first study kept the old bush positions at x=350 and x=960; the later cleanup moved them to x=300 and x=990 so they no longer crowd the ice cubes. The fixture uses the production `Renderer`, the same fixed characters and arena geometry, and matched day and night states. Hazards, pickups, physics, landing heights, and animated weather belong to later work.
+The original prop study held the Pearl background and Astra Canvas platforms fixed while comparing decorative art: snowmen, igloo, evergreens, the snowball pile, and two cover bushes. The first study kept the old bush positions at x=350 and x=960; later production passes changed placements and projected the ice cube faces. The fixture uses the production `Renderer`, fixed characters and arena geometry, and matched day and night states. Hazards, pickups, physics, landing heights, and animated weather belong to later work. See the [cross-pass lessons and current selections](../winter-lake/LESSONS.md) for the full decision trail.
 
 ## Full-scene choices
 
@@ -29,13 +29,13 @@ In the original painted study, the foreground bushes were drawn in the same laye
 | Background trees and figures | Ground x=200, 640, 1200; proportional placements on shelves | Avoid a uniform row of identical trees; keep the central bridge clear around moving characters. |
 | Foreground cover and accents | Bushes x=350 and x=960, edge firs x=50 and x=1230, snowball pile x=850 | Keep bushes opaque over players and avoid a foreground glow or gaps. |
 
-These positions describe the original painted study. The current Canvas implementation uses the cleaned positions described below.
+These positions describe the original painted study. Subsequent Canvas and painted production passes changed them as described below.
 
 The illustrated variants are stronger than the first directly coded [Canvas sketches](round-grove-day.png), [wind sketch](wind-carved-day.png), and [cedar sketch](lake-cedar-day.png). Those sketches preserved the layout and layering, but their identical small snow ribbons made the trees look mechanical. The painted reference made the missing shape language obvious: thicker irregular snow, distinct bough profiles, texture inside connected masses, and variation between tree types. The sketches remain in the gallery as a record of that failed first pass. The next step is to choose or mix the strongest prop shapes, then translate them into a production treatment and check live occlusion and load cost. The first preference from the full scene is Round Grove for cover and broad tree mass, with occasional Wind Carved trees for variety; Lake Cedar's icy accents should be used sparingly so they do not compete with playable ice.
 
 ## Round Grove Canvas implementation
 
-The first production translation drew the selected direction with Canvas paths in [`winterLakeRoundGroveProps.ts`](../../../src/engine/arenas/packs/winterLakeRoundGroveProps.ts). Background props are drawn when the static layer is built; foreground bushes and snowballs are drawn into a cropped transparent `OffscreenCanvas` at 2× resolution and blitted over players each frame. Arena collision rectangles and landing heights are unchanged. The original painted sheet and the earlier Canvas sketch remain visible above for comparison.
+The first production translation drew the selected direction with Canvas paths in [`winterLakeRoundGroveProps.ts`](../../../src/engine/arenas/packs/winterLakeRoundGroveProps.ts). At that stage, background props were drawn when the static layer was built; foreground bushes and snowballs were drawn into a cropped transparent `OffscreenCanvas` at 2× resolution and blitted over players each frame. Later passes removed the snowball pile and replaced the bush drawings, while retaining the cropped foreground cache. Arena collision rectangles and landing heights remained unchanged. The original painted sheet and the earlier Canvas sketch remain visible above for comparison.
 
 | New Canvas day | New Canvas night | New Canvas cover |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ The earlier right-side igloo looked like a flat ice tent once a shelf covered it
 
 ### Painted bush and igloo replacement
 
-In the live game, the Canvas bushes still looked like Meadow foliage with snow stickers, and the Blue Brick igloo still read as a simplified blue dome. We generated fresh transparent paintings for a broadleaf berry bush, a compact hedge, and a hand-built block igloo. The bushes have a connected dark foliage mass under individually readable leaves, three irregular snow loads, and sparse berries. The igloo has staggered icy blocks, a snow roof, and an offset dark doorway. The bushes move a further 10 px away from the adjacent ice cubes. Trees, snowmen, snowballs, platforms, and background remain as in the cleanup pass.
+In the live game, the Canvas bushes still looked like Meadow foliage with snow stickers, and the Blue Brick igloo still read as a simplified blue dome. We generated fresh transparent paintings for a broadleaf berry bush, a compact hedge, and a hand-built block igloo. The bushes have a connected dark foliage mass under individually readable leaves, three irregular snow loads, and sparse berries. The igloo has staggered icy blocks, a snow roof, and an offset dark doorway. In that first replacement pass, other props and platforms stayed as they were; the current captures below include the later snowman, layout, and cube-depth changes described further down.
 
 | Day | Night | Cover |
 | --- | --- | --- |
@@ -74,10 +74,10 @@ The snowmen's body and head now use a stronger cool-side gradient, a clipped und
 
 The two ground ice cubes looked tucked into the same plane as the scenery. Their vector bodies now extend 9 logical pixels below the former ground line, with a narrow cool contact shadow. The snow-capped top edge stays at its original coordinate, and the `iceCube` platform rectangles and collision behavior are unchanged. This creates a modest foreground face without making the landing height misleading. Compare the [previous scene](cube-depth-before-day.png) with the [current day](paint-replacement-day.png) and [night](paint-replacement-night.png) captures; the change applies only to the two upright cubes, not the floating shelves or ground strip.
 
-Reproduce the implementation and igloo comparison captures with `node docs/mockups/winter-props/capture-round.mjs` while the worktree Vite server is running.
+The older Canvas igloo comparisons are retained as historical captures. Use `capture-paint.mjs` for the current production composition; `capture-round.mjs` was written before the painted replacement and should not be used to regenerate its historical Canvas images from the current pack.
 
 `node docs/mockups/winter-props/benchmark-round.mjs` measures one construction and 500 cached foreground calls in headless Chromium. After the Meadow bush reuse and layout cleanup, one local run measured about 2.8 ms for the static background props, 6.1 ms for the foreground cache build, and 0.003 ms per cached foreground call. These are JavaScript enqueue timings in an isolated fixture, not GPU frame timings or a before/after gameplay benchmark.
 
 ## Reproduction
 
-Run Vite from this worktree and set `WINTER_PROPS_URL` to its `/bunnybrawl/` URL, then run `node docs/mockups/winter-props/capture.mjs` for the painted and early Canvas study variants. The fixture is [`render.ts`](../winter-lake/render.ts) with `?variant=current&props=painted-round|painted-wind|painted-cedar&time=day|night`. Add `&cover=1` to see players behind the two bushes. The historical `current-*.png` files were captured before production changed and are intentionally not overwritten by that script. Use `capture-round.mjs` for the new production art. The [generation prompts](PROMPTS.md) and original sheet are retained so the art direction can be revisited without relying on a temporary server.
+Run Vite from this worktree and set `WINTER_PROPS_URL` to its `/bunnybrawl/` URL. Use `node docs/mockups/winter-props/capture-paint.mjs` to refresh the current production day, night, and cover captures. `node docs/mockups/winter-props/capture.mjs` reproduces the painted and early Canvas study variants through the [`render.ts`](../winter-lake/render.ts) fixture with `?variant=current&props=painted-round|painted-wind|painted-cedar&time=day|night`; add `&cover=1` for hidden players. The historical `current-*.png` and Canvas images came from earlier production states and should remain available for comparison. The [generation prompts](PROMPTS.md) and source sheets are retained so the art direction can be revisited without relying on a temporary server.
