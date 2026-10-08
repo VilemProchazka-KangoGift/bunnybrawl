@@ -11,7 +11,7 @@
   <input class="form-range" id="victory-time" type="range" min="0" max="4.2" step="0.005" value="0">
   <div class="victory-panels">
     <section><h3>Current fireworks</h3><canvas aria-label="Victory celebration comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="victory-choice" value="Current fireworks"><span class="form-check-label">Current fireworks</span></label></section>
-    <section><h3>Confetti cannon</h3><canvas aria-label="Victory celebration comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="victory-choice" value="Confetti cannon"><span class="form-check-label">Confetti cannon</span></label></section>
+    <section><h3>Fireworks + winner zoom</h3><canvas aria-label="Victory celebration comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="victory-choice" value="Fireworks + winner zoom"><span class="form-check-label">Fireworks + winner zoom</span></label></section>
     <section><h3>Winner bounce</h3><canvas aria-label="Victory celebration comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="victory-choice" value="Winner bounce"><span class="form-check-label">Winner bounce</span></label></section>
     <section><h3>Carrot shower</h3><canvas aria-label="Victory celebration comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="victory-choice" value="Carrot shower"><span class="form-check-label">Carrot shower</span></label></section>
   </div>
@@ -61,14 +61,17 @@ else{for(let i=0;i<16;i++){const rand=rng(678+i*113),t=age-rand()*.75;if(t<0||t>
       if(canvas.width!==Math.round(w*dpr)||canvas.height!==h*dpr){canvas.width=Math.round(w*dpr);canvas.height=h*dpr;}
       const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
       ctx.fillStyle=night.checked?'#334451':'#ACD5DE';ctx.fillRect(0,0,w,h);
+      const progress=Math.max(0,Math.min(1,(time-.4)/3)),camera=index===1?1+.35*progress*progress*(3-2*progress):1;
+      canvas.dataset.camera=String(camera);
+      ctx.save();ctx.translate(w/2,h-20-22*z);ctx.scale(camera,camera);ctx.translate(-w/2,-(h-20-22*z));
       if(backdrop.naturalWidth){ctx.globalAlpha=night.checked?.22:.6;ctx.drawImage(backdrop,230,240,480,300,0,0,w,h);ctx.globalAlpha=1;}
       ctx.save();ctx.translate(w/2,h-20);ctx.scale(z,z);
       ctx.fillStyle=night.checked?'#627958':'#9FB875';ctx.fillRect(-w/z,0,w*2/z,24);
       ctx.strokeStyle='#665344';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-w/z,0);ctx.lineTo(w/z,0);ctx.stroke();
       canvas.dataset.hit=String(time>=.4);
       canvas.setAttribute('aria-label',character.value+' victory: '+canvas.parentElement.querySelector('h3').textContent+(time>=.4?', celebrating':', ready'));
-      drawVictoryScene(ctx,characterImages[character.value],character.value,time,index,w/z);
-      ctx.restore();
+      drawVictoryScene(ctx,characterImages[character.value],character.value,time,index===1?0:index,w/z);
+      ctx.restore();ctx.restore();
     });
   }
   new ResizeObserver(draw).observe(root);for(const image of Object.values(characterImages))image.onload=draw;backdrop.onload=draw;

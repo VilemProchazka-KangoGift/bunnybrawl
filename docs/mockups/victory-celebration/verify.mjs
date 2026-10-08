@@ -21,7 +21,11 @@ await page.locator('#victory-night').check();await page.screenshot({path:dir+'/c
 const names=await page.locator('#victory-character option').allTextContents();
 for(const name of names){await page.locator('#victory-character').selectOption(name);await scrub(.95)}
 await page.locator('#victory-character').selectOption('Bunny');await page.locator('#victory-scale').selectOption('1');
-await page.locator('input[value="Confetti cannon"]').check();
+await page.locator('input[value="Fireworks + winner zoom"]').check();
+await scrub(3.4);
+const camera=await page.locator('canvas').nth(1).getAttribute('data-camera');
+if(Math.abs(Number(camera)-1.35)>.001)throw Error('Wrong winner zoom endpoint');
+await page.screenshot({path:dir+'/captures/winner-zoom.png',fullPage:true});
 await page.setViewportSize({width:360,height:900});await page.screenshot({path:dir+'/captures/mobile.png',fullPage:true});
 if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Overflow');
 if(errors.length)throw Error(errors.join('\n'));

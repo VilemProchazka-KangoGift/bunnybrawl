@@ -7,3 +7,5 @@ The frozen fireworks study preserves runtime burst cadence (300ms), 20-30 partic
 Build: node docs/mockups/victory-celebration/build-study.mjs [optional-inline-path]. Verify: node docs/mockups/victory-celebration/verify.mjs. Browser checks passed: common before-event baseline, four distinct cues, all 19 characters, controls, detail/night, 360px layout and no runtime errors. Game-size capture inspected. No gameplay source changed; build, Vitest and game E2E not run.
 
 Separate features/victory-celebration worktree starts from origin/main 3aaad95.
+
+Winner zoom revision: second panel now compares original fireworks with the same seeded fireworks plus a whole-scene zoom. Smoothstep eases from 1x to 1.35x over three seconds after victory; pivot is the winner body center. Original remains the first panel, Winner bounce and Carrot shower remain for reference. Zoom endpoint and existing browser checks pass; endpoint screenshot inspected. This remains a scripted review prototype; production camera is unchanged.
