@@ -14,14 +14,19 @@ import { drawPlatformStudyBack, drawPlatformStudyFront, isIllustratedStudy, PLAT
 import { drawPaintedPlatformBack, drawPaintedPlatformFront, preloadPaintedPlatforms } from '../winter-platforms/painted';
 import { drawWinterVectorPlatformBack, drawWinterVectorPlatformFront } from '../../../src/engine/arenas/packs/winterLakeVectorPlatforms';
 import { drawTracedSvgBack, drawTracedSvgFront, preloadTracedBridge } from '../winter-platforms/tracedSvg';
+import { drawPropStudyBack, drawPropStudyFront, PROP_VARIANTS, type PropVariant } from '../winter-props/variants';
+import { drawIllustratedPropBack, drawIllustratedPropFront, ILLUSTRATED_PROP_VARIANTS, preloadPropAtlas, type IllustratedPropVariant } from '../winter-props/illustrated';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
 const time = query.get('time') ?? 'day';
 const platformVariant = query.get('platform');
+const propVariant = query.get('props');
 if (!VARIANTS.includes(variant as Variant)) throw new Error(`Unknown background: ${variant}`);
 if (time !== 'day' && time !== 'night') throw new Error(`Unknown time: ${time}`);
 if (platformVariant && !PLATFORM_VARIANTS.includes(platformVariant as PlatformVariant)) throw new Error(`Unknown platform: ${platformVariant}`);
+if (propVariant && propVariant !== 'current' && !PROP_VARIANTS.includes(propVariant as PropVariant)
+  && !ILLUSTRATED_PROP_VARIANTS.includes(propVariant as IllustratedPropVariant)) throw new Error(`Unknown props: ${propVariant}`);
 
 let seed = 7312;
 Math.random = () => {
@@ -35,6 +40,16 @@ await registerPlayablePlushRoster();
 const arena = toArena(winterLake);
 const theme = toThemeConfig(winterLake);
 await preloadIllustratedBackdrop('winter_lake');
+if (propVariant && propVariant !== 'current') {
+  if (ILLUSTRATED_PROP_VARIANTS.includes(propVariant as IllustratedPropVariant)) {
+    await preloadPropAtlas();
+    theme.drawBackgroundNature = (ctx, currentArena) => drawIllustratedPropBack(ctx, currentArena, propVariant as IllustratedPropVariant);
+    theme.drawForegroundNature = (ctx, currentArena) => drawIllustratedPropFront(ctx, currentArena, propVariant as IllustratedPropVariant);
+  } else {
+    theme.drawBackgroundNature = (ctx, currentArena) => drawPropStudyBack(ctx, currentArena, propVariant as PropVariant);
+    theme.drawForegroundNature = (ctx, currentArena) => drawPropStudyFront(ctx, currentArena, propVariant as PropVariant);
+  }
+}
 if (platformVariant) {
   // The study's `current` background is the approved Pearl plate. Without a
   // platform query, older background comparisons retain their old baseline.
@@ -143,6 +158,13 @@ state.players.forEach((player, i) => {
   player.score = 0;
   player.facing = i % 2 ? 'left' : 'right';
 });
+if (query.has('cover')) {
+  // Player coordinates are their left edge; center each silhouette in its bush.
+  state.players[0].x = 332;
+  state.players[0].y = 625;
+  state.players[3].x = 942;
+  state.players[3].y = 625;
+}
 renderer.warmSpriteCache(state.players.map(player => player.character.name));
 renderer.renderBackground(arena);
 renderer.renderFrame(state, arena, []);
