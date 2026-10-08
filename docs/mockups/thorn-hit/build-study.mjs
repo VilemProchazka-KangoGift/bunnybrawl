@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 const read=p=>fs.readFileSync(new URL(p,import.meta.url),'utf8');
 const old=read('../movement-vfx/index.html');
-const atlas=old.match(/atlas.src='([^']+)'/)[1],backdrop=old.match(/backdrop.src='([^']+)'/)[1];
+const backdrop=old.match(/backdrop.src='([^']+)'/)[1];
 const names=['Bunny','Fox','Frog','Bear','Owl','Cat','Wolf','Panda','Pig','Cow','Goat','Horse','Sheep','Monkey','Tiger','Rhino','Hedgehog','Chick','Axolotl'];
 const characters=Object.fromEntries(names.map(name=>[name,'data:image/webp;base64,'+fs.readFileSync(new URL('../../../src/engine/characters/plush/assets/'+name.toLowerCase()+'.webp',import.meta.url)).toString('base64')]));
 const briar='data:image/png;base64,'+fs.readFileSync(new URL('../thorn-briar/production-revision-8x.png',import.meta.url)).toString('base64');

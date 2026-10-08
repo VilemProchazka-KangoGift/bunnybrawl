@@ -1,3 +1,4 @@
+/* global window, document, innerWidth */
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';

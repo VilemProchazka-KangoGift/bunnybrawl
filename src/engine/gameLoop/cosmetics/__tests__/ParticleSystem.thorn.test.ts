@@ -36,22 +36,21 @@ describe('ParticleSystem.applyHazardHitVFX — thorn', () => {
     ps = new ParticleSystem(state, arena, theme, settings, new Map());
   });
 
-  it('emits more particles than the legacy thorn case', () => {
-    const hit: HazardHitResult = { type: 'thorn', px: 100, py: 200, sx: 100, sy: 215 };
-    ps.applyHazardHitVFX(hit, 'P1', state, false);
-    // Legacy: 18 blood + 8 shrapnel = 26. Current: 18 blood + 14 barbs + 1 drip = 33.
-    expect(ps.getParticles().length).toBeGreaterThanOrEqual(33);
+  it('emits one anchored cartoon impact instead of blood and drip particles', () => {
+    const hit: HazardHitResult = {type:'thorn',px:100,py:200,sx:100,sy:215};
+    ps.applyHazardHitVFX(hit,'P1',state,false);
+    expect(ps.getParticles()).toHaveLength(1);
+    expect(ps.getParticles()[0]).toMatchObject({shape:'thornJolt',x:100,y:200,vx:0,vy:0,life:.48,maxLife:.48});
   });
 
-  it('emits at least one long-lived drip particle near the contact point', () => {
-    const hit: HazardHitResult = { type: 'thorn', px: 100, py: 200, sx: 100, sy: 215 };
-    ps.applyHazardHitVFX(hit, 'P1', state, false);
-    const dripCandidates = ps.getParticles().filter(p =>
-      Math.abs(p.x - 100) < 6 &&
-      Math.abs(p.y - 215) < 6 &&
-      p.life > 0.7
-    );
-    expect(dripCandidates.length).toBeGreaterThanOrEqual(1);
+  it('keeps the impact stationary during its lifetime and then removes it', async () => {
+    const {updateParticles} = await import('../particles');
+    ps.applyHazardHitVFX({type:'thorn',px:100,py:200},'P1',state,false);
+    const particles=ps.getParticles();
+    updateParticles(particles,[],arena.platforms,true,[],.1);
+    expect(particles[0]).toMatchObject({x:100,y:200,vx:0,vy:0});
+    updateParticles(particles,[],arena.platforms,true,[],.5);
+    expect(particles).toHaveLength(0);
   });
 
   it('boosts screen flash to at least 0.18', () => {
@@ -60,13 +59,10 @@ describe('ParticleSystem.applyHazardHitVFX — thorn', () => {
     expect(state.screenFlash).toBeGreaterThanOrEqual(0.18);
   });
 
-  it('emits all blood + barb particles as spikes for an elongated splatter read', () => {
-    const hit: HazardHitResult = { type: 'thorn', px: 100, py: 200, sx: 100, sy: 215 };
-    ps.applyHazardHitVFX(hit, 'P1', state, false);
-    const spikes = ps.getParticles().filter(p => p.shape === 'spike');
-    // 18 blood (red) + 14 barb (brown) = 32. Drip stays a circle.
-    expect(spikes.length).toBe(32);
-    const barbs = spikes.filter(p => p.color === '#5C3A1E' || p.color === '#3A2210');
-    expect(barbs.length).toBe(14);
+  it('does not add a new screen flash while replaying a hit', () => {
+    state.screenFlash=0;
+    ps.applyHazardHitVFX({type:'thorn',px:100,py:200},'P1',state,true);
+    expect(state.screenFlash).toBe(0);
   });
+
 });
