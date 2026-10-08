@@ -7,10 +7,8 @@ import type { ParticleEmitter } from '../../simulator/types';
 import { BLOOD_COLOR, CARROT_SIZE } from '../../constants';
 import { haptics } from '../../haptics';
 import { emitParticle as _emitParticle, spawnDustParticles as _spawnDustParticles, spawnJumpDustParticles as _spawnJumpDustParticles, spawnGoreParticles as _spawnGoreParticles, spawnConfetti as _spawnConfetti, spawnCarrotVFX as _spawnCarrotVFX, spawnRingVFX as _spawnRingVFX, spawnFirework as _spawnFirework, updateParticles, updateConfetti } from './particles';
-import { launchGib, spawnGibs, updateGibs, GIB_FREELIST_CAP } from './gibs';
+import { spawnGibs, updateGibs, GIB_FREELIST_CAP } from './gibs';
 import { updateWeather } from './environment';
-
-const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
 
 export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   private state: MatchState;
@@ -111,30 +109,27 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     }
   }
 
-  /** Orchestration: connects gib launcher + particle emitter for carrot pickup. */
+  /** Selected cartoon chip-and-leaf burst for carrot pickup. */
   pickupCarrotVFX(x: number, y: number): void {
     const cy = y + CARROT_SIZE / 2;
-    // Orange carrot chunks
-    for (let i = 0; i < 4; i++) {
-      const s = 4 + Math.random() * 3;
-      launchGib(this.state.gibs, this.gibFreeList, x, cy, 10, 0.15, 0.85, 80, 200, s, s, '#FF8C00', '#CC6600', '#FFB040', '', 'body');
-    }
-    // Green leaf pieces
-    for (let i = 0; i < 2; i++) {
-      launchGib(this.state.gibs, this.gibFreeList, x, cy, 8, 0.2, 0.8, 60, 160, 5, 3, '#4CAF50', '#2E7D32', '#81C784', '', 'body');
-    }
-    // Orange/gold particle burst
-    for (let i = 0; i < 16; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 80 + Math.random() * 140;
-      const life = 0.3 + Math.random() * 0.4;
-      this.emitParticle(x, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, life, 2 + Math.random() * 5, CARROT_PICKUP_COLORS[i % CARROT_PICKUP_COLORS.length]);
-    }
-    // Upward gold sparkle ring
+    // Large inked pieces, with a short readable hold before fading.
     for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const speed = 30 + Math.random() * 30;
-      this.emitParticle(x, cy, Math.cos(angle) * speed, -50 - Math.random() * 40, 0.4 + Math.random() * 0.2, 1.5 + Math.random() * 2, '#FFD700');
+      const angle = -Math.PI * .93 + i * .37;
+      const ux = Math.cos(angle), uy = Math.sin(angle);
+      this.emitParticle(x + ux * 14, cy + uy * 14, ux * 125, uy * 125,
+        .34, 5 + (i % 3) * 1.2, '#EE9851', 'carrotChip');
+    }
+    for (let i = 0; i < 5; i++) {
+      const angle = -2.6 + i * .55;
+      const ux = Math.cos(angle), uy = Math.sin(angle);
+      this.emitParticle(x + ux * 16, cy + uy * 16, ux * (135 + i * 6), uy * (135 + i * 6),
+        .4, 8 + i * 1.5, '#91B675', 'carrotLeaf');
+    }
+    for (let i = 0; i < 6; i++) {
+      const angle = -2.98 + i * .855;
+      const ux = Math.cos(angle), uy = Math.sin(angle);
+      this.emitParticle(x + ux * 24, cy + uy * 24, ux * 165, uy * 165,
+        .22, 2.5 + (i % 3) * .6, '#FFF3D5', 'spike');
     }
   }
 

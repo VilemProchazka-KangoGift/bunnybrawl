@@ -38,3 +38,24 @@ node docs/mockups/carrot-pickup/capture.mjs http://127.0.0.1:4196/bunnybrawl/ do
 
 The capture uses `?simWorker=off` so it can place carrots through the diagnostic match state, then saves day and night PNGs. Use the version of the code being compared for each capture.
 Pass an arena ID as a third argument to inspect another setting.
+
+## Pickup visual effects
+
+
+Cosmetic studies using the cached Bunny sprite and Meadow background, with the same scripted approach and growth for all three options.
+
+- Bite burst: five irregular inked carrot chips and one leaf, fading over 0.24 seconds.
+- Leaf flick: three curved veined leaves and one small chip, fading over 0.30 seconds.
+- Crunch pop: an uneven cream-and-ink burst with carrot and leaf detail, plus three flecks, fading over 0.16 seconds.
+
+These are design studies; pickup scoring, growth, spawn feedback, and runtime rendering are unchanged. Sprite growth and movement here are illustrative, not a simulation recording. Selection will be integrated and reviewed in the real game next.
+
+Build: `node docs/mockups/carrot-pickup/build-study.mjs [absolute-inline-fragment-path]`.
+Verify: `node docs/mockups/carrot-pickup/verify.mjs`.
+
+Playwright verified the three canvases, pause and scrub, detail scale, night, saved selection, and a 360px layout with no browser errors. Captures were visually inspected. No application build or runtime test suite was needed for these docs-only studies.
+
+Current effect is a fourth selectable comparison. `build-baseline.mjs` freezes the actual pickup emitter, particle and gib updates, and draw functions from runtime source, with seeded randomness. It includes four orange and two green oval gibs, sixteen orange/gold particles and eight gold sparks. Flat ground is shared with the studies; scoring, growth and movement remain illustrative. The baseline is frozen in baseline.js so future implementation does not silently overwrite the reference.
+Exaggerated revision: eight larger chips for Bite burst, five larger leaves for Leaf flick, and a roughly 60px irregular Crunch pop. Alternatives add six cream-and-ink accents, fast outward easing, and a brief full-opacity hold; effects draw behind the player so the character remains readable. Durations are 0.34, 0.40 and 0.24 seconds. Current effect remains the frozen reference. Four-panel browser checks passed again and the game-size capture was inspected.
+
+Selected combination: Bite burst + Leaf flick. Actual pickup replaces oval debris and gold circles with eight inked carrot chips (0.34s), five veined leaves (0.40s), and six short cream accents (0.22s). Spawn feedback is unchanged. Custom shapes travel through both structured cloning and SAB (shape IDs 5 and 6); keep the frozen baseline unchanged. Shapes hold full opacity briefly, then fade without shrinking into dots. Practice: `/bunnybrawl/docs/mockups/carrot-pickup/playtest.html`, with real main simulation and renderer worker; reset clears fat state and re-seeds one carrot. Build, 115 focused Vitest tests, live pickup/reset capture, and four existing Playwright checks covering both simulation modes passed. Full Vitest and full E2E suites not run.
