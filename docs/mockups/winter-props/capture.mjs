@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 const directory=dirname(fileURLToPath(import.meta.url));
 const server=process.env.WINTER_PROPS_URL ?? 'http://127.0.0.1:4233/bunnybrawl/';
-const variants=['current','round-grove','wind-carved','lake-cedar','painted-round','painted-wind','painted-cedar'];
+// current-*.png are archived captures from before the Round Grove integration.
+// Leave them intact so the historical comparison stays truthful.
+const variants=['round-grove','wind-carved','lake-cedar','painted-round','painted-wind','painted-cedar'];
 const browser=await chromium.launch({headless:true});
 try {
   for(const variant of variants) for(const time of ['day','night']) {
@@ -20,7 +22,7 @@ try {
     await page.close();
     console.log(`${variant}-${time}.png`);
   }
-  for(const variant of ['current','painted-round','painted-wind','painted-cedar']) {
+  for(const variant of ['painted-round','painted-wind','painted-cedar']) {
     const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
     const errors=[];
     page.on('pageerror',error=>errors.push(error.message));

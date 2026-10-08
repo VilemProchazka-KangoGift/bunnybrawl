@@ -6,13 +6,11 @@ import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { getIllustratedBackdrop } from '../illustratedBackdropAsset';
 import { drawWinterVectorPlatformBack, drawWinterVectorPlatformFront } from './winterLakeVectorPlatforms';
+import { drawRoundGroveBackground, drawRoundGroveForeground } from './winterLakeRoundGroveProps';
 import { computeNightIntensity } from '../../rendering';
-import { getFloatingPlatforms, bakeVerticalGradientStrip } from '../../themes/utils';
+import { bakeVerticalGradientStrip } from '../../themes/utils';
 import {
-  drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle,
-  drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
-  drawSnowballPyramid, drawLargeSnowballPyramid,
-  drawFgBush, drawHill,
+  drawHill,
   createThornRenderer, createSpringRenderer,
 } from '../../themes/drawPrimitives';
 import { applyIsoInsets } from '../../themes/drawPrimitives';
@@ -316,136 +314,9 @@ export const winterLake: ArenaPack = {
     ctx.restore();
   },
 
-  drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => {
-    const ground = arena.platforms[0];
-    const y = ground.y;
-    const floats = getFloatingPlatforms(arena.platforms);
+  drawBackgroundNature: drawRoundGroveBackground,
 
-    // === LANDMARKS (background, edges) ===
-    drawBigSnowman(ctx, 55, y, 90);
-    drawIgloo(ctx, 1080, y, 180, 100);
-
-    // === GROUND — sparse ===
-    drawPineTree(ctx, 200, y, 75, true);
-    drawChristmasTree(ctx, 640, y, 55);
-    drawPineTree(ctx, 1200, y, 60, true);
-    drawSnowman(ctx, 530, y, 32);
-    drawIcePatch(ctx, 700, y, 220);
-
-    // Ice cube blocks are drawn by drawPlatform (platforms with style:'iceCube').
-
-    // === PLATFORM DECORATIONS — rich variety per platform ===
-    for (let i = 0; i < floats.length; i++) {
-      const plat = floats[i];
-      const mid = plat.x + plat.width / 2;
-      if (plat.width >= 350) {
-        // Very wide — spaced out: tree, christmas, snowman, tree
-        drawPineTree(ctx, plat.x + 35, plat.y, 45, true);
-        drawChristmasTree(ctx, plat.x + plat.width * 0.35, plat.y, 38);
-        drawSnowman(ctx, plat.x + plat.width * 0.58, plat.y, 26);
-        drawPineTree(ctx, plat.x + plat.width - 35, plat.y, 42, true);
-        drawIcicle(ctx, plat.x + 60, plat.y + plat.height, 10);
-        drawIcicle(ctx, plat.x + plat.width - 60, plat.y + plat.height, 11);
-      } else if (plat.width >= 200) {
-        // Wide — trees + mixed decorations
-        drawPineTree(ctx, plat.x + 25, plat.y, 38, true);
-        drawChristmasTree(ctx, plat.x + plat.width - 28, plat.y, 32);
-        if (i % 2 === 0) {
-          drawSnowman(ctx, mid, plat.y, 25);
-        } else {
-          drawSnowball(ctx, mid - 15, plat.y, 5);
-          drawSnowball(ctx, mid + 15, plat.y, 4);
-        }
-        drawIcicle(ctx, mid, plat.y + plat.height, 9);
-      } else if (plat.width >= 140) {
-        // Medium — tree + decoration
-        if (i % 3 === 0) {
-          drawChristmasTree(ctx, mid - 12, plat.y, 30);
-          drawSnowball(ctx, mid + 22, plat.y, 4);
-        } else if (i % 3 === 1) {
-          drawPineTree(ctx, mid - 12, plat.y, 34, true);
-          drawSnowman(ctx, mid + 28, plat.y, 24);
-        } else {
-          drawPineTree(ctx, mid + 10, plat.y, 32, true);
-          drawSnowballPyramid(ctx, mid - 20, plat.y, 6);
-        }
-        drawSnowDrift(ctx, plat.x + 10, plat.y, 18, 2);
-      } else {
-        // Small — one item + accent
-        if (i % 3 === 0) {
-          drawPineTree(ctx, mid, plat.y, 20, true);
-        } else if (i % 3 === 1) {
-          drawSnowman(ctx, mid, plat.y, 24);
-        } else {
-          drawChristmasTree(ctx, mid, plat.y, 18);
-        }
-        drawSnowball(ctx, plat.x + 10, plat.y, 3);
-      }
-    }
-
-    // === ICICLES under wide bridge ===
-    const bridge = floats.find(p => p.width >= 350);
-    if (bridge) {
-      for (let i = 0; i < 6; i++) {
-        drawIcicle(ctx, bridge.x + 30 + i * 60, bridge.y + bridge.height, 8 + Math.random() * 7);
-      }
-    }
-  },
-
-  drawForegroundNature: (ctx: Ctx2D, arena: Arena) => {
-    const ground = arena.platforms[0];
-    const gy = ground.y;
-    const floats = getFloatingPlatforms(arena.platforms);
-
-    // Foreground trees on ground
-    drawPineTree(ctx, 50, gy, 65, true);
-    drawPineTree(ctx, 1230, gy, 55, true);
-
-    // Foreground trees on wide platforms
-    for (const plat of floats) {
-      if (plat.width >= 350) {
-        drawPineTree(ctx, plat.x + plat.width * 0.45, plat.y, 28, true);
-      }
-    }
-
-    // Large snowball pyramid — single foreground accent
-    drawLargeSnowballPyramid(ctx, 850, gy, 10);
-
-    // Snow bushes
-    const snowBushColors = {
-      backLayer: '#2A4A2A',
-      mainBody: '#3A5A3A',
-      leftLobe: '#345A34',
-      rightLobe: '#305830',
-      highlight: '#4A6A4A',
-      highlight2: '#4A6A4A',
-      berries: ['#CC3333', '#DD4444', '#BB2222'],
-    };
-    drawFgBush(ctx, 350, gy, 34, snowBushColors);
-    // Snow cap on bush
-    ctx.fillStyle = 'rgba(230, 240, 250, 0.75)';
-    ctx.beginPath();
-    ctx.ellipse(350, gy - 34 * 0.55, 34 * 0.55, 34 * 0.22, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(245, 250, 255, 0.5)';
-    ctx.beginPath();
-    ctx.ellipse(355, gy - 34 * 0.65, 34 * 0.25, 34 * 0.12, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    drawFgBush(ctx, 960, gy, 30, snowBushColors);
-    // Snow cap on bush
-    ctx.fillStyle = 'rgba(230, 240, 250, 0.75)';
-    ctx.beginPath();
-    ctx.ellipse(960, gy - 30 * 0.55, 30 * 0.55, 30 * 0.22, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(245, 250, 255, 0.5)';
-    ctx.beginPath();
-    ctx.ellipse(965, gy - 30 * 0.65, 30 * 0.25, 30 * 0.12, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    drawSnowDrift(ctx, 15, gy, 45, 6);
-    drawSnowDrift(ctx, 1250, gy, 40, 5);
-  },
+  drawForegroundNature: drawRoundGroveForeground,
 
   drawAnimatedBackground: (ctx, _arena, time, dayPhase) => {
     if (getSlowDevice()) return;
