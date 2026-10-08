@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 const isWinterBackdrop = (url: string) => /winter-lake-pearl-painted[^/]*\.webp$/.test(new URL(url).pathname);
+const winterPropNames = ['winter-bush-leafy', 'winter-bush-hedge', 'winter-igloo'];
+const isWinterProp = (url: string, name: string) => new URL(url).pathname.includes(name);
 const winterPlatformNames = ['winter-shelf-painted', 'winter-bridge-painted', 'winter-cube-painted'];
 const isArchivedPlatformImage = (url: string) => winterPlatformNames.some(name => new URL(url).pathname.includes(name));
 
@@ -30,9 +32,11 @@ for (const mode of ['default', 'simWorker=off'] as const) {
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => { if (isArchivedPlatformImage(request.url())) archivedPlatformRequests.push(request.url()); });
     const backdrop = page.waitForResponse(response => isWinterBackdrop(response.url()));
+    const props = winterPropNames.map(name => page.waitForResponse(response => isWinterProp(response.url(), name)));
     const query = mode === 'default' ? '' : '&simWorker=off';
     await page.goto(`/?arena=winter_lake&bots=1${query}`);
     expect((await backdrop).status()).toBe(200);
+    expect((await Promise.all(props)).map(response => response.status())).toEqual([200, 200, 200]);
     await page.waitForFunction(() => window.__bunnyTest?.state()?.phase === 'playing');
     await expect(page.locator('.match-loading-overlay')).toHaveCount(0);
     expect(archivedPlatformRequests).toEqual([]);

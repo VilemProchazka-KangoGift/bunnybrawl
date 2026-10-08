@@ -2,6 +2,7 @@ import type { Arena, Ctx2D } from '../../types';
 import { CANVAS_WIDTH } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
 import { drawMeadowBushStyle } from './meadowSelectedArt';
+import { getWinterPropArt } from '../illustratedBackdropAsset';
 
 // Round Grove is authored as paths at a small reference size. The generated
 // painting in docs/mockups/winter-props is an art-direction reference only.
@@ -124,6 +125,19 @@ function tree(ctx: Ctx2D, x: number, baseY: number, height: number, seed: number
 }
 
 function bush(ctx: Ctx2D, x: number, baseY: number, size: number, style: 0 | 1): void {
+  const image = style === 0 ? getWinterPropArt().leafy : getWinterPropArt().hedge;
+  if (image) {
+    const width = style === 0 ? 151 : 153;
+    const height = style === 0 ? 73 : 72;
+    // A connected opaque interior preserves the deliberate hiding cover.
+    ctx.beginPath();
+    ctx.moveTo(x-width*.48,baseY);
+    ctx.bezierCurveTo(x-width*.57,baseY-height*.45,x-width*.32,baseY-height*.97,x,baseY-height*.91);
+    ctx.bezierCurveTo(x+width*.32,baseY-height*.97,x+width*.57,baseY-height*.45,x+width*.48,baseY);
+    ctx.closePath(); ctx.fillStyle='#244c4d'; ctx.fill();
+    ctx.drawImage(image,x-width/2,baseY-height,width,height);
+    return;
+  }
   // Meadow's connected silhouette is already proven at gameplay scale.
   drawMeadowBushStyle(ctx,x,baseY,size,style,true);
   ctx.save(); ctx.translate(x,baseY); ctx.scale(size/50,size/50);
@@ -256,7 +270,9 @@ export function drawRoundGroveBackground(ctx: Ctx2D, arena: Arena, iglooVariant:
   // The left ground stays open for the spawn and the first bush.
   snowman(ctx,485,y,84,true);
   tree(ctx,615,y,56,2);
-  igloo(ctx,iglooVariant==='arched-door'?685:700,y,
+  const paintedIgloo = iglooVariant === 'blue-brick' ? getWinterPropArt().igloo : null;
+  if (paintedIgloo) ctx.drawImage(paintedIgloo,690,y-91,194,91);
+  else igloo(ctx,iglooVariant==='arched-door'?685:700,y,
     iglooVariant==='arched-door'?165:155,iglooVariant==='arched-door'?76:85,iglooVariant);
   tree(ctx,1195,y,58,3);
 
@@ -286,7 +302,7 @@ export function drawRoundGroveBackground(ctx: Ctx2D, arena: Arena, iglooVariant:
 
 function paintGroundForeground(ctx: Ctx2D, arena: Arena): void {
   const y=arena.platforms[0].y;
-  bush(ctx,300,y,62,0); bush(ctx,990,y,60,1);
+  bush(ctx,290,y,62,0); bush(ctx,1000,y,60,1);
   snowballs(ctx,1105,y);
   drift(ctx,15,y,45); drift(ctx,1250,y,40);
 }

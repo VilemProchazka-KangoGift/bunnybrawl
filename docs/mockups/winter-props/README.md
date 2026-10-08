@@ -35,7 +35,7 @@ The illustrated variants are stronger than the first directly coded [Canvas sket
 
 ## Round Grove Canvas implementation
 
-The selected direction is now drawn with Canvas paths by [`winterLakeRoundGroveProps.ts`](../../../src/engine/arenas/packs/winterLakeRoundGroveProps.ts) and wired into the Winter Lake pack. This uses no prop atlas at runtime. Background props are drawn when the static layer is built; foreground bushes and snowballs are drawn into a cropped transparent `OffscreenCanvas` at 2× resolution and blitted over players each frame. Arena collision rectangles and landing heights are unchanged. The original painted sheet remains an art reference, and the earlier Canvas sketch remains visible above for comparison.
+The first production translation drew the selected direction with Canvas paths in [`winterLakeRoundGroveProps.ts`](../../../src/engine/arenas/packs/winterLakeRoundGroveProps.ts). Background props are drawn when the static layer is built; foreground bushes and snowballs are drawn into a cropped transparent `OffscreenCanvas` at 2× resolution and blitted over players each frame. Arena collision rectangles and landing heights are unchanged. The original painted sheet and the earlier Canvas sketch remain visible above for comparison.
 
 | New Canvas day | New Canvas night | New Canvas cover |
 | --- | --- | --- |
@@ -50,7 +50,19 @@ The first translation still looked mechanical because every fir had four thin, r
 | ![Blue Brick igloo](igloo-blue-brick.png) | ![Snow Stone igloo](igloo-snow-stone.png) | ![Arched Door igloo](igloo-arched-door.png) |
 | ![Blue Brick igloo at night](igloo-blue-brick-night.png) | ![Snow Stone igloo at night](igloo-snow-stone-night.png) | ![Arched Door igloo at night](igloo-arched-door-night.png) |
 
-The earlier right-side igloo looked like a flat ice tent once a shelf covered its top. These three are rebuilt as curved block domes with offset seams, a shaded roof, and a dark doorway. Blue Brick currently has the clearest form against the pale lake. Snow Stone is softer but gets lost against the snowy banks; Arched Door has a wider, lower body and a side entry. All three use the same new ground interval and keep gameplay geometry unchanged. The production pack uses Blue Brick pending review.
+The earlier right-side igloo looked like a flat ice tent once a shelf covered its top. These three were rebuilt as curved block domes with offset seams, a shaded roof, and a dark doorway. Blue Brick had the clearest form against the pale lake. Snow Stone was softer but got lost against the snowy banks; Arched Door had a wider, lower body and a side entry. All three use the same new ground interval and keep gameplay geometry unchanged. Blue Brick became the fallback after the painted replacement below.
+
+### Painted bush and igloo replacement
+
+In the live game, the Canvas bushes still looked like Meadow foliage with snow stickers, and the Blue Brick igloo still read as a simplified blue dome. We generated fresh transparent paintings for a broadleaf berry bush, a compact hedge, and a hand-built block igloo. The bushes have a connected dark foliage mass under individually readable leaves, three irregular snow loads, and sparse berries. The igloo has staggered icy blocks, a snow roof, and an offset dark doorway. The bushes move a further 10 px away from the adjacent ice cubes. Trees, snowmen, snowballs, platforms, and background remain as in the cleanup pass.
+
+| Day | Night | Cover |
+| --- | --- | --- |
+| ![Painted replacement day](paint-replacement-day.png) | ![Painted replacement night](paint-replacement-night.png) | ![Painted replacement cover](paint-replacement-cover.png) |
+
+The images above are captures of the **production renderer** with the replacement assets loaded, at 1280 × 720. The original transparent [bush study](snow-bush-paint-study.png) and [igloo study](igloo-paint-study.png) are retained. [`prepare-runtime-art.mjs`](prepare-runtime-art.mjs) crops, downsizes, and WebP-encodes those sources to two 420 × 195 bush files and one 480 × 226 igloo file (about 86 KB combined). This is technical asset preparation; the painting itself is unaltered. [`capture-paint.mjs`](capture-paint.mjs) reproduces the scene captures.
+
+The foreground bushes still render **over** players, with a connected opaque backing under each transparent painting so small gaps cannot reveal a hidden character. The selected igloo stays in the cleaned open ground interval. The menu and lobby prefetch the three files with Pearl; each render worker decodes its own copy before drawing Winter Lake. If an image fails, the previous Canvas bush or igloo draws instead. Production build, focused preload tests, Chromium smoke, and Winter Lake browser tests in both worker modes pass. A local screenshot confirms composition and occlusion in the fixture; moving gameplay should still be reviewed by eye before merging.
 
 Reproduce the implementation and igloo comparison captures with `node docs/mockups/winter-props/capture-round.mjs` while the worktree Vite server is running.
 

@@ -56,6 +56,20 @@ const winterPlatformArt = {
   cube: createBackdrop(new URL('./assets/winter-cube-painted.webp', import.meta.url).href),
 };
 
+const winterPropArt = {
+  leafy: createBackdrop(new URL('./assets/winter-bush-leafy.webp', import.meta.url).href),
+  hedge: createBackdrop(new URL('./assets/winter-bush-hedge.webp', import.meta.url).href),
+  igloo: createBackdrop(new URL('./assets/winter-igloo.webp', import.meta.url).href),
+};
+
+export function getWinterPropArt(): { leafy: ImageBitmap | null; hedge: ImageBitmap | null; igloo: ImageBitmap | null } {
+  return {
+    leafy: winterPropArt.leafy.get(),
+    hedge: winterPropArt.hedge.get(),
+    igloo: winterPropArt.igloo.get(),
+  };
+}
+
 export function getWinterPlatformArt(): {
   shelf: ImageBitmap | null; bridge: ImageBitmap | null; cube: ImageBitmap | null;
 } {
@@ -82,11 +96,17 @@ export function hasIllustratedBackdrop(arenaId: string): arenaId is IllustratedA
 
 export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSignal): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId === 'winter_lake') {
+    return Promise.all([backdrops[arenaId].prefetch(signal), ...Object.values(winterPropArt).map(asset => asset.prefetch(signal))]).then(() => {});
+  }
   return backdrops[arenaId].prefetch(signal);
 }
 
 export function preloadIllustratedBackdrop(arenaId: string): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId === 'winter_lake') {
+    return Promise.all([backdrops[arenaId].preload(), ...Object.values(winterPropArt).map(asset => asset.preload())]).then(() => {});
+  }
   return backdrops[arenaId].preload();
 }
 

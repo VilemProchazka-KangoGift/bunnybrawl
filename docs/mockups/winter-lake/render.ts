@@ -167,9 +167,9 @@ state.players.forEach((player, i) => {
 });
 if (query.has('cover')) {
   // Player coordinates are their left edge; center each silhouette in its bush.
-  state.players[0].x = 282;
+  state.players[0].x = 272;
   state.players[0].y = 625;
-  state.players[3].x = 972;
+  state.players[3].x = 982;
   state.players[3].y = 625;
 }
 renderer.warmSpriteCache(state.players.map(player => player.character.name));
