@@ -145,18 +145,23 @@ function drawShrub(c: Ctx2D, foreground: boolean, thicket: boolean): void {
 }
 
 /** Stable placement shared with the approved mockup: Leafy, Hedge, Flower thicket. */
-export function mixedBushIndex(x: number, y: number, foreground: boolean): number {
+export function mixedBushIndex(x: number, y: number, foreground: boolean): 0 | 1 | 2 {
   if (y >= 650) {
     if (foreground) return x < 300 ? 0 : x < 800 ? 1 : x < 1080 ? 2 : 0;
     return x < 300 ? 1 : x < 600 ? 2 : x < 850 ? 0 : x < 1050 ? 1 : 2;
   }
-  return (Math.floor(x / 150) + Math.floor(y / 110) + (foreground ? 0 : 1)) % 3;
+  return ((Math.floor(x / 150) + Math.floor(y / 110) + (foreground ? 0 : 1)) % 3) as 0 | 1 | 2;
 }
 
 export function drawMeadowBush(c: Ctx2D, x: number, groundY: number, size: number, foreground: boolean): void {
+  const index = mixedBushIndex(x, groundY, foreground);
+  drawMeadowBushStyle(c, x, groundY, size, index, foreground);
+}
+
+/** Reuse the selected Meadow silhouette at a fixed style in other biomes. */
+export function drawMeadowBushStyle(c: Ctx2D, x: number, groundY: number, size: number, index: 0 | 1 | 2, foreground = true): void {
   c.save(); c.translate(x, groundY); c.scale(size / 50, size / 50);
   c.globalAlpha = 1; c.lineCap = 'round'; c.lineJoin = 'round';
-  const index = mixedBushIndex(x, groundY, foreground);
   if (index === 0) drawLeafyBush(c);
   else drawShrub(c, foreground, index === 2);
   c.restore();

@@ -10,6 +10,12 @@ try {
     ['canvas-round-day', 'time=day'],
     ['canvas-round-night', 'time=night'],
     ['canvas-round-cover', 'time=day&cover=1'],
+    ['igloo-blue-brick', 'time=day&igloo=blue-brick'],
+    ['igloo-snow-stone', 'time=day&igloo=snow-stone'],
+    ['igloo-arched-door', 'time=day&igloo=arched-door'],
+    ['igloo-blue-brick-night', 'time=night&igloo=blue-brick'],
+    ['igloo-snow-stone-night', 'time=night&igloo=snow-stone'],
+    ['igloo-arched-door-night', 'time=night&igloo=arched-door'],
   ]) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     const errors = [];

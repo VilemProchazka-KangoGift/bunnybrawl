@@ -1,6 +1,6 @@
 # Winter Lake props and cover: redesign step 4
 
-The selected Pearl background and Astra Canvas platforms are held fixed in every capture. This pass explores decorative props only: the large snowman and igloo, ground and shelf evergreens, smaller snowmen, the foreground snowball pile, and the two ground bushes at x=350 and x=960. The fixture uses the production `Renderer`, the same fixed characters and arena geometry, and matched day and night states. Hazards, pickups, physics, landing heights, and animated weather belong to later work.
+The selected Pearl background and Astra Canvas platforms are held fixed in every capture. This pass explores decorative props only: the large snowman and igloo, ground and shelf evergreens, smaller snowmen, the foreground snowball pile, and the two ground bushes. The first study kept the old bush positions at x=350 and x=960; the later cleanup moved them to x=300 and x=990 so they no longer crowd the ice cubes. The fixture uses the production `Renderer`, the same fixed characters and arena geometry, and matched day and night states. Hazards, pickups, physics, landing heights, and animated weather belong to later work.
 
 ## Full-scene choices
 
@@ -15,13 +15,13 @@ The [source concept sheet](prop-direction-sheet.png) shows each prop at a readab
 
 ### Cover check
 
-The foreground bushes are drawn in the same layer and at the same ground positions as the current bushes. Each has a continuous opaque dark leaf body under the illustrated cutout, so its painted texture cannot expose a hidden player through transparent holes. The captures place Bunny and Wolf behind both bushes, with the foreground draw order intact. Their upper features may still peek above the bush because the bushes retain roughly the existing height; the body is occluded as intended.
+In the original painted study, the foreground bushes were drawn in the same layer and at the old ground positions. Each had a continuous opaque dark leaf body under the illustrated cutout, so its painted texture could not expose a hidden player through transparent holes. The historical captures placed Bunny and Wolf behind both bushes. The later Canvas cleanup uses Meadow's selected bush silhouettes and moves the two bushes slightly away from the ice cubes, still drawing them over players.
 
 | Current cover | Round Grove | Wind Carved | Lake Cedar |
 | --- | --- | --- | --- |
 | ![Current cover](current-cover.png) | ![Round cover](painted-round-cover.png) | ![Wind cover](painted-wind-cover.png) | ![Cedar cover](painted-cedar-cover.png) |
 
-## Occupancy and review constraints
+## Original study occupancy and review constraints
 
 | Layer | Positions retained | Review concern |
 | --- | --- | --- |
@@ -29,21 +29,32 @@ The foreground bushes are drawn in the same layer and at the same ground positio
 | Background trees and figures | Ground x=200, 640, 1200; proportional placements on shelves | Avoid a uniform row of identical trees; keep the central bridge clear around moving characters. |
 | Foreground cover and accents | Bushes x=350 and x=960, edge firs x=50 and x=1230, snowball pile x=850 | Keep bushes opaque over players and avoid a foreground glow or gaps. |
 
+These positions describe the original painted study. The current Canvas implementation uses the cleaned positions described below.
+
 The illustrated variants are stronger than the first directly coded [Canvas sketches](round-grove-day.png), [wind sketch](wind-carved-day.png), and [cedar sketch](lake-cedar-day.png). Those sketches preserved the layout and layering, but their identical small snow ribbons made the trees look mechanical. The painted reference made the missing shape language obvious: thicker irregular snow, distinct bough profiles, texture inside connected masses, and variation between tree types. The sketches remain in the gallery as a record of that failed first pass. The next step is to choose or mix the strongest prop shapes, then translate them into a production treatment and check live occlusion and load cost. The first preference from the full scene is Round Grove for cover and broad tree mass, with occasional Wind Carved trees for variety; Lake Cedar's icy accents should be used sparingly so they do not compete with playable ice.
 
 ## Round Grove Canvas implementation
 
-The selected direction is now drawn with Canvas paths by [`winterLakeRoundGroveProps.ts`](../../../src/engine/arenas/packs/winterLakeRoundGroveProps.ts) and wired into the Winter Lake pack. This uses no prop atlas at runtime. Background props are drawn when the static layer is built; foreground trees, snowballs, and the two opaque bushes are drawn into small transparent `OffscreenCanvas` regions at 2× resolution and blitted over players each frame. Their positions and the arena collision rectangles are unchanged. The original painted sheet remains an art reference, and the earlier Canvas sketch remains visible above for comparison.
+The selected direction is now drawn with Canvas paths by [`winterLakeRoundGroveProps.ts`](../../../src/engine/arenas/packs/winterLakeRoundGroveProps.ts) and wired into the Winter Lake pack. This uses no prop atlas at runtime. Background props are drawn when the static layer is built; foreground bushes and snowballs are drawn into a cropped transparent `OffscreenCanvas` at 2× resolution and blitted over players each frame. Arena collision rectangles and landing heights are unchanged. The original painted sheet remains an art reference, and the earlier Canvas sketch remains visible above for comparison.
 
 | New Canvas day | New Canvas night | New Canvas cover |
 | --- | --- | --- |
 | ![Canvas Round Grove day](canvas-round-day.png) | ![Canvas Round Grove night](canvas-round-night.png) | ![Canvas Round Grove cover](canvas-round-cover.png) |
 
-The first translation still looked mechanical because every fir had four thin, regularly spaced snow ribbons. The second pass removed one tier and kept a deeper dark bough visible beneath each thicker snow mass. The igloo was reduced so it no longer crowded the right shelf; the bushes were broadened to maintain deliberate cover. At 20–30px, detail is intentionally reduced to silhouette, dark edge, and one snow mass. The Canvas result remains simpler than the painted concept, especially in the igloo and smallest snowmen; use these captures to judge whether more shape work is desired before declaring the art direction final.
+The first translation still looked mechanical because every fir had four thin, regularly spaced snow ribbons. The second pass removed one tier and kept a deeper dark bough visible beneath each thicker snow mass. A live play review exposed the next problem: the old snowman was behind a foreground tree and shelf; the igloo was hidden by a right shelf; the bushes overlapped ice cubes; many tiny decorations crowded the jump surfaces. The cleanup moved the large shaded snowman to x=485, the igloo into open central ground, and the cover bushes to x=300 and x=990. It removed most decorations from small steps and the foreground bridge tree. The firs gained dark side planes and blue-gray snow shading. The bushes now call the actual Meadow Leafy and Hedge drawings, with light snow caps added afterward. Their silhouettes remain opaque over players.
 
-Reproduce these three implementation captures with `node docs/mockups/winter-props/capture-round.mjs` while the worktree Vite server is running.
+### Igloo iterations in the cleaned arena
 
-`node docs/mockups/winter-props/benchmark-round.mjs` measures one construction and 500 cached foreground calls in headless Chromium. One local run measured about 2.0 ms for the static background props, 3.5 ms for the foreground cache build, and 0.003 ms per cached foreground call. These are JavaScript enqueue timings in an isolated fixture, not GPU frame timings or a before/after gameplay benchmark.
+| Blue Brick (provisional game choice) | Snow Stone | Arched Door |
+| --- | --- | --- |
+| ![Blue Brick igloo](igloo-blue-brick.png) | ![Snow Stone igloo](igloo-snow-stone.png) | ![Arched Door igloo](igloo-arched-door.png) |
+| ![Blue Brick igloo at night](igloo-blue-brick-night.png) | ![Snow Stone igloo at night](igloo-snow-stone-night.png) | ![Arched Door igloo at night](igloo-arched-door-night.png) |
+
+The earlier right-side igloo looked like a flat ice tent once a shelf covered its top. These three are rebuilt as curved block domes with offset seams, a shaded roof, and a dark doorway. Blue Brick currently has the clearest form against the pale lake. Snow Stone is softer but gets lost against the snowy banks; Arched Door has a wider, lower body and a side entry. All three use the same new ground interval and keep gameplay geometry unchanged. The production pack uses Blue Brick pending review.
+
+Reproduce the implementation and igloo comparison captures with `node docs/mockups/winter-props/capture-round.mjs` while the worktree Vite server is running.
+
+`node docs/mockups/winter-props/benchmark-round.mjs` measures one construction and 500 cached foreground calls in headless Chromium. After the Meadow bush reuse and layout cleanup, one local run measured about 2.8 ms for the static background props, 6.1 ms for the foreground cache build, and 0.003 ms per cached foreground call. These are JavaScript enqueue timings in an isolated fixture, not GPU frame timings or a before/after gameplay benchmark.
 
 ## Reproduction
 

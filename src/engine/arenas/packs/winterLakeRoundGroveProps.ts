@@ -1,16 +1,17 @@
 import type { Arena, Ctx2D } from '../../types';
 import { CANVAS_WIDTH } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
+import { drawMeadowBushStyle } from './meadowSelectedArt';
 
 // Round Grove is authored as paths at a small reference size. The generated
 // painting in docs/mockups/winter-props is an art-direction reference only.
 const INK = '#263e4d';
 const PINE_DARK = '#214e4e';
 const PINE_MID = '#2d7567';
-const PINE_LIGHT = '#4c9381';
 const SNOW = '#f7faf6';
 const SNOW_SHADE = '#b6d5df';
 const ICE = '#68b6ca';
+export type IglooVariant = 'blue-brick' | 'snow-stone' | 'arched-door';
 
 function shape(ctx: Ctx2D, fill: string, line = INK, width = 1.5): void {
   ctx.fillStyle = fill;
@@ -28,6 +29,17 @@ function oval(ctx: Ctx2D, x: number, y: number, rx: number, ry: number, fill: st
   ctx.fillStyle = fill;
   ctx.fill();
   if (line) { ctx.strokeStyle = line; ctx.lineWidth = width; ctx.stroke(); }
+}
+
+function snowOval(ctx: Ctx2D, x: number, y: number, rx: number, ry: number): void {
+  const shade=ctx.createRadialGradient(x-rx*.42,y-ry*.55,2,x+rx*.28,y+ry*.12,rx*1.8);
+  shade.addColorStop(0,'#ffffff');
+  shade.addColorStop(.52,'#f0f8f7');
+  shade.addColorStop(1,'#a5cbd7');
+  ctx.beginPath(); ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);
+  ctx.fillStyle=shade; ctx.fill();
+  ctx.strokeStyle=INK; ctx.lineWidth=1.6; ctx.stroke();
+  mark(ctx,[[x-rx*.58,y-ry*.1],[x-rx*.42,y-ry*.48],[x-rx*.06,y-ry*.68]],'#ffffff',1.4);
 }
 
 function mark(ctx: Ctx2D, points: readonly [number, number][], color: string, width: number): void {
@@ -57,6 +69,15 @@ function bough(ctx: Ctx2D, y: number, halfWidth: number, rise: number, shift: nu
   ctx.bezierCurveTo(right - 10, y - 8, shift + halfWidth * .21, y - rise + 1, shift - 2, y - rise);
   ctx.closePath();
   shape(ctx, tint, INK, 1.6);
+  ctx.save(); ctx.clip();
+  ctx.beginPath(); ctx.moveTo(shift + 3,y-rise+3);
+  ctx.bezierCurveTo(right-16,y-rise+12,right+2,y-15,right+3,y+9);
+  ctx.lineTo(shift+2,y+12); ctx.closePath();
+  ctx.fillStyle='#173f45'; ctx.globalAlpha=.46; ctx.fill(); ctx.globalAlpha=1;
+  ctx.beginPath(); ctx.moveTo(left+7,y-3);
+  ctx.quadraticCurveTo(shift-8,y+3,right-3,y-4);
+  ctx.strokeStyle='#8bb5a1'; ctx.lineWidth=1.35; ctx.stroke();
+  ctx.restore();
 
   ctx.beginPath();
   ctx.moveTo(left + 3, y - 7);
@@ -70,6 +91,12 @@ function bough(ctx: Ctx2D, y: number, halfWidth: number, rise: number, shift: nu
   ctx.bezierCurveTo(left + 17, y - 2, left + 10, y - 3, left + 8, y - 7);
   ctx.closePath();
   shape(ctx, SNOW, '#426273', 1.15);
+  ctx.save(); ctx.clip();
+  ctx.beginPath(); ctx.moveTo(shift+1,y-rise+1);
+  ctx.bezierCurveTo(right-13,y-rise+8,right-4,y-12,right+1,y-5);
+  ctx.lineTo(right+1,y+4); ctx.lineTo(shift-5,y+4); ctx.closePath();
+  ctx.fillStyle=SNOW_SHADE; ctx.globalAlpha=.63; ctx.fill(); ctx.globalAlpha=1;
+  ctx.restore();
   mark(ctx, [[left + 10, y - 12], [left + 17, y - 15], [left + 26, y - 14]], '#ffffff', 1.6);
   mark(ctx, [[shift + 3, y - rise + 5], [shift + 10, y - rise + 7]], '#ffffff', 1.2);
   mark(ctx, [[right - 15, y - 8], [right - 11, y - 7]], SNOW_SHADE, 1.2);
@@ -96,35 +123,21 @@ function tree(ctx: Ctx2D, x: number, baseY: number, height: number, seed: number
   ctx.restore();
 }
 
-function bush(ctx: Ctx2D, x: number, baseY: number, size: number, seed: number): void {
-  ctx.save(); ctx.translate(x, baseY); ctx.scale(size / 34 * 1.15, size / 34 * 1.2);
-  if (seed % 2) ctx.scale(-1, 1);
-  // One opaque connected leaf body protects the deliberate hiding mechanic.
-  ctx.beginPath(); ctx.moveTo(-35, 0);
-  ctx.bezierCurveTo(-39,-8,-34,-17,-29,-19);
-  ctx.bezierCurveTo(-31,-29,-22,-32,-16,-30);
-  ctx.bezierCurveTo(-12,-37,-2,-39,5,-33);
-  ctx.bezierCurveTo(14,-37,25,-31,27,-23);
-  ctx.bezierCurveTo(37,-19,38,-8,35,0); ctx.closePath();
-  shape(ctx, PINE_DARK, INK, 2);
-  // Interlocking leaf planes add volume but never make alpha holes.
-  oval(ctx,-23,-10,14,11,PINE_MID); oval(ctx,-12,-22,13,10,PINE_MID);
-  oval(ctx,8,-25,16,10,PINE_MID); oval(ctx,23,-13,14,11,PINE_MID);
-  oval(ctx,-2,-8,19,11,'#25645b');
-  for (const [mx,my] of [[-29,-14],[-22,-8],[-9,-17],[9,-15],[20,-9],[28,-15]] as const) {
-    mark(ctx,[[mx-2,my],[mx,my-3],[mx+4,my-2]],PINE_LIGHT,1.7);
-  }
-  // Separate lumpy snow pillows follow foliage; dark leaves remain prominent.
-  for (const [sx,sy,rx,ry] of [[-23,-25,10,6],[-6,-32,14,7],[16,-29,13,7],[29,-18,7,4],[-29,-15,6,4]] as const) {
+function bush(ctx: Ctx2D, x: number, baseY: number, size: number, style: 0 | 1): void {
+  // Meadow's connected silhouette is already proven at gameplay scale.
+  drawMeadowBushStyle(ctx,x,baseY,size,style,true);
+  ctx.save(); ctx.translate(x,baseY); ctx.scale(size/50,size/50);
+  // Snow rests on the crown, leaving the leaves and berries readable.
+  for(const [sx,sy,rx,ry] of [[-22,-30,11,5],[-3,-38,13,5],[18,-29,11,5]] as const) {
     ctx.beginPath(); ctx.moveTo(sx-rx,sy+2);
-    ctx.bezierCurveTo(sx-rx,sy-ry*.8,sx-rx*.45,sy-ry*1.4,sx,sy-ry);
-    ctx.bezierCurveTo(sx+rx*.5,sy-ry*1.2,sx+rx,sy-ry*.3,sx+rx,sy+2);
-    ctx.bezierCurveTo(sx+rx*.5,sy+ry*.4,sx-rx*.4,sy+ry*.35,sx-rx,sy+2);
-    ctx.closePath(); shape(ctx,SNOW,'#476576',.9);
-    mark(ctx,[[sx-rx*.45,sy-ry*.45],[sx-rx*.12,sy-ry*.7]],'#ffffff',1.4);
+    ctx.bezierCurveTo(sx-rx*.8,sy-ry*.7,sx-rx*.3,sy-ry*1.5,sx,sy-ry);
+    ctx.bezierCurveTo(sx+rx*.45,sy-ry*1.35,sx+rx,sy-ry*.2,sx+rx,sy+2);
+    ctx.bezierCurveTo(sx+rx*.4,sy+ry*.5,sx-rx*.6,sy+ry*.4,sx-rx,sy+2);
+    ctx.closePath(); shape(ctx,SNOW,'#65828c',.75);
+    mark(ctx,[[sx-rx*.4,sy-ry*.45],[sx,sy-ry*.75]],'#ffffff',1.25);
   }
-  for (const [bx,by] of [[-27,-7],[-15,-13],[3,-15],[18,-7],[29,-9]] as const) {
-    oval(ctx,bx,by,1.7,1.8,'#bd6870',INK,.4);
+  for(const [fx,fy] of [[-29,-16],[-13,-20],[11,-17],[25,-13]] as const) {
+    oval(ctx,fx,fy,1.3,1.1,'#e4f3ef');
   }
   ctx.restore();
 }
@@ -137,10 +150,8 @@ function snowman(ctx: Ctx2D, x: number, baseY: number, height: number, arms = fa
     mark(ctx,[[-27,-49],[-32,-50]],'#77573c',1.5);
     mark(ctx,[[27,-46],[33,-45]],'#77573c',1.5);
   }
-  oval(ctx,0,-19,20,20,'#d7e9ef',INK,1.7);
-  oval(ctx,-4,-24,14,11,SNOW);
-  oval(ctx,1,-52,15,15,SNOW,INK,1.6);
-  oval(ctx,-5,-56,6,4,'#ffffff');
+  snowOval(ctx,0,-19,20,20);
+  snowOval(ctx,1,-52,15,15);
   // Scarf has a visible wrapped band and hanging end at both large and small sizes.
   ctx.beginPath(); ctx.moveTo(-13,-43); ctx.quadraticCurveTo(0,-39,14,-44);
   ctx.lineTo(13,-37); ctx.quadraticCurveTo(0,-33,-13,-38); ctx.closePath();
@@ -154,39 +165,63 @@ function snowman(ctx: Ctx2D, x: number, baseY: number, height: number, arms = fa
   ctx.restore();
 }
 
-function igloo(ctx: Ctx2D, x: number, baseY: number, width: number, height: number): void {
+function igloo(ctx: Ctx2D, x: number, baseY: number, width: number, height: number, variant: IglooVariant): void {
   ctx.save(); ctx.translate(x, baseY); ctx.scale(width / 180, height / 100);
-  ctx.beginPath(); ctx.moveTo(0,0); ctx.bezierCurveTo(4,-46,31,-85,80,-90);
-  ctx.bezierCurveTo(128,-94,162,-60,180,0); ctx.closePath();
-  shape(ctx,'#64aec4',INK,2.1);
-  // Faceted block planes, clipped inside a connected dome.
-  ctx.save(); ctx.clip();
-  ctx.beginPath(); ctx.moveTo(11,-29); ctx.quadraticCurveTo(78,-16,163,-28);
-  ctx.lineTo(180,5); ctx.lineTo(0,5); ctx.closePath(); ctx.fillStyle='#468fae'; ctx.fill();
-  for (const [ax,ay,bx,by] of [[17,-25,61,-24],[65,-24,113,-26],[117,-26,162,-24],[30,-50,80,-46],[84,-47,133,-50],[55,-68,105,-65]] as const) {
-    mark(ctx,[[ax,ay],[Math.round((ax+bx)/2),Math.round((ay+by)/2)-2],[bx,by]],'#d1eced',1.6);
+  const body=ctx.createLinearGradient(0,-95,0,8);
+  if(variant==='snow-stone') {
+    body.addColorStop(0,'#f8faf5'); body.addColorStop(.48,'#d5e8e9'); body.addColorStop(1,'#8bbdcc');
+  } else if(variant==='arched-door') {
+    body.addColorStop(0,'#d7f0ed'); body.addColorStop(.5,'#78bac7'); body.addColorStop(1,'#3a87a7');
+  } else {
+    body.addColorStop(0,'#b7e7e9'); body.addColorStop(.5,'#74bdd0'); body.addColorStop(1,'#4294b2');
   }
-  for (const [ax,ay,bx,by] of [[46,-46,44,-25],[99,-47,98,-25],[139,-48,142,-25],[70,-66,71,-48]] as const) {
-    mark(ctx,[[ax,ay],[bx,by]],'#d0e9ea',1.4);
+  // The whole shelter is one rounded dome, rather than a tent-shaped cap.
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.bezierCurveTo(6,-48,35,-86,82,-92);
+  ctx.bezierCurveTo(130,-98,169,-58,180,0); ctx.closePath();
+  ctx.fillStyle=body; ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=2.6; ctx.stroke();
+  ctx.save(); ctx.clip();
+  // Broad curved courses and offset joints read as hand-built snow blocks.
+  const seam=variant==='snow-stone' ? '#90b9c5' : '#bfe5e7';
+  for(const [ax,ay,bx,by] of [[9,-25,171,-24],[26,-48,155,-49],[52,-69,130,-71]] as const) {
+    ctx.beginPath(); ctx.moveTo(ax,ay);
+    ctx.quadraticCurveTo(90,ay+5,bx,by);
+    ctx.strokeStyle=seam; ctx.lineWidth=2.2; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ax,ay+3); ctx.quadraticCurveTo(90,ay+8,bx,by+3);
+    ctx.strokeStyle='#477b91'; ctx.lineWidth=.8; ctx.stroke();
+  }
+  for(const [ax,ay,bx,by] of [[43,-47,41,-25],[96,-47,96,-24],[145,-48,145,-25],
+    [68,-69,70,-48],[121,-69,119,-48],[65,-25,62,2],[126,-25,130,2]] as const) {
+    mark(ctx,[[ax,ay],[bx,by]],seam,1.9);
+  }
+  // A few uneven reflective facets provide material texture without a grid.
+  for(const [x0,y0,x1,y1] of [[19,-17,35,-13],[52,-38,69,-36],[122,-39,138,-36],[34,-59,49,-56],[91,-59,106,-58]] as const) {
+    mark(ctx,[[x0,y0],[x1,y1]],'#ebfaf5',2.2);
   }
   ctx.restore();
-  // Deep inset doorway is the landmark's dominant focal point.
-  ctx.beginPath(); ctx.moveTo(100,0); ctx.bezierCurveTo(102,-36,115,-53,136,-55);
-  ctx.bezierCurveTo(159,-55,172,-32,173,0); ctx.closePath(); shape(ctx,'#397e9a',INK,2);
-  ctx.beginPath(); ctx.moveTo(112,0); ctx.bezierCurveTo(114,-28,121,-41,136,-43);
-  ctx.bezierCurveTo(151,-43,159,-24,160,0); ctx.closePath(); shape(ctx,'#26495e',INK,1.1);
-  // One thick, uneven roof of snow rather than a white dome overlay.
-  ctx.beginPath(); ctx.moveTo(4,-33); ctx.bezierCurveTo(19,-70,46,-92,80,-94);
-  ctx.bezierCurveTo(113,-98,144,-79,161,-50);
-  ctx.bezierCurveTo(147,-54,137,-59,126,-57);
-  ctx.bezierCurveTo(119,-60,114,-68,108,-66);
-  ctx.bezierCurveTo(88,-75,73,-73,60,-67);
-  ctx.bezierCurveTo(43,-67,26,-51,4,-33); ctx.closePath(); shape(ctx,SNOW,INK,1.8);
-  mark(ctx,[[35,-64],[54,-76],[73,-79]],'#ffffff',2);
-  mark(ctx,[[103,-82],[125,-74],[141,-61]],SNOW_SHADE,1.2);
-  // Snow at the entrance and a few shallow foreground lumps.
-  oval(ctx,8,-3,16,7,SNOW,SNOW_SHADE,.8);
-  oval(ctx,181,-3,13,6,SNOW,SNOW_SHADE,.8);
+
+  const door=variant==='arched-door' ? 125 : 100;
+  const doorHalf=variant==='arched-door' ? 27 : 25;
+  ctx.beginPath(); ctx.moveTo(door-doorHalf-5,0);
+  ctx.bezierCurveTo(door-doorHalf-5,-31,door-17,-54,door,-57);
+  ctx.bezierCurveTo(door+18,-57,door+doorHalf+5,-32,door+doorHalf+5,0);
+  ctx.closePath(); shape(ctx,variant==='snow-stone'?'#86b8c6':'#3986a2',INK,2.2);
+  ctx.beginPath(); ctx.moveTo(door-doorHalf+5,0);
+  ctx.bezierCurveTo(door-doorHalf+5,-27,door-12,-44,door,-46);
+  ctx.bezierCurveTo(door+13,-46,door+doorHalf-5,-27,door+doorHalf-5,0);
+  ctx.closePath(); shape(ctx,'#24485d',INK,1.3);
+  mark(ctx,[[door-doorHalf-2,-5],[door-doorHalf-1,-31],[door-12,-48]],'#cdecee',2.4);
+  // Snow forms several uneven ledges, leaving most blockwork visible.
+  ctx.beginPath(); ctx.moveTo(20,-62);
+  ctx.bezierCurveTo(42,-87,67,-96,83,-96);
+  ctx.bezierCurveTo(108,-98,133,-86,153,-60);
+  ctx.bezierCurveTo(137,-66,126,-69,116,-67);
+  ctx.bezierCurveTo(105,-77,95,-77,86,-73);
+  ctx.bezierCurveTo(69,-81,52,-73,44,-70);
+  ctx.bezierCurveTo(34,-72,26,-67,20,-62); ctx.closePath(); shape(ctx,SNOW,INK,1.5);
+  mark(ctx,[[49,-80],[71,-88],[90,-86]],'#ffffff',2.2);
+  mark(ctx,[[116,-78],[132,-70]],SNOW_SHADE,1.3);
+  oval(ctx,4,-3,14,6,SNOW,SNOW_SHADE,.8);
+  oval(ctx,178,-3,12,6,SNOW,SNOW_SHADE,.8);
   ctx.restore();
 }
 
@@ -213,49 +248,51 @@ function icicle(ctx: Ctx2D, x: number, y: number, length: number): void {
   shape(ctx,ICE,'#46758a',.65);
 }
 
-export function drawRoundGroveBackground(ctx: Ctx2D, arena: Arena): void {
-  const ground = arena.platforms[0]; const y = ground.y;
-  const floats = getFloatingPlatforms(arena.platforms);
-  snowman(ctx,55,y,90,true); igloo(ctx,1090,y,145,80);
-  tree(ctx,200,y,75,1); tree(ctx,640,y,55,2); tree(ctx,1200,y,60,3);
-  snowman(ctx,530,y,32);
-  for (let i=0;i<floats.length;i++) {
-    const plat=floats[i]; const mid=plat.x+plat.width/2;
-    if (plat.width>=350) {
-      tree(ctx,plat.x+35,plat.y,45,i); tree(ctx,plat.x+plat.width*.35,plat.y,38,i+2);
-      snowman(ctx,plat.x+plat.width*.58,plat.y,26);
-      tree(ctx,plat.x+plat.width-35,plat.y,42,i+3);
-      icicle(ctx,plat.x+60,plat.y+plat.height,10);
-      icicle(ctx,plat.x+plat.width-60,plat.y+plat.height,11);
-    } else if (plat.width>=200) {
-      tree(ctx,plat.x+25,plat.y,38,i); tree(ctx,plat.x+plat.width-28,plat.y,32,i+1);
-      if (i%2===0) snowman(ctx,mid,plat.y,25);
-      else { drift(ctx,mid-14,plat.y,16); drift(ctx,mid+15,plat.y,14); }
-      icicle(ctx,mid,plat.y+plat.height,9);
-    } else if (plat.width>=140) {
-      tree(ctx,mid-12,plat.y,30,i);
-      if(i%3===1) snowman(ctx,mid+28,plat.y,24);
-      else drift(ctx,mid+24,plat.y,16);
-    } else if (plat.width>=80) {
-      if(i%3===1) snowman(ctx,mid,plat.y,24);
-      else tree(ctx,mid,plat.y,22,i);
+export function drawRoundGroveBackground(ctx: Ctx2D, arena: Arena, iglooVariant: IglooVariant = 'blue-brick'): void {
+  const y=arena.platforms[0].y;
+  const floats=getFloatingPlatforms(arena.platforms);
+  // The ground landmarks sit in open intervals between the ice cubes and
+  // cover bushes. In the old layout, shelves obscured both the igloo and snowman.
+  // The left ground stays open for the spawn and the first bush.
+  snowman(ctx,485,y,84,true);
+  tree(ctx,615,y,56,2);
+  igloo(ctx,iglooVariant==='arched-door'?685:700,y,
+    iglooVariant==='arched-door'?165:155,iglooVariant==='arched-door'?76:85,iglooVariant);
+  tree(ctx,1195,y,58,3);
+
+  const upperBridge=floats.find(p=>p.width>=350);
+  if(upperBridge) {
+    tree(ctx,upperBridge.x+34,upperBridge.y,46,4);
+    snowman(ctx,upperBridge.x+112,upperBridge.y,39);
+    tree(ctx,upperBridge.x+upperBridge.width-34,upperBridge.y,44,5);
+    for(let i=0;i<5;i++) icicle(ctx,upperBridge.x+44+i*76,upperBridge.y+upperBridge.height,8+(i%3)*2);
+  }
+  const lowerBridge=floats.find(p=>p.width>=200 && p.width<350);
+  if(lowerBridge) {
+    tree(ctx,lowerBridge.x+29,lowerBridge.y,39,6);
+    snowman(ctx,lowerBridge.x+lowerBridge.width-31,lowerBridge.y,35);
+    icicle(ctx,lowerBridge.x+lowerBridge.width*.5,lowerBridge.y+lowerBridge.height,10);
+  }
+  // A few shelf accents give scale; the tiny steps stay clear for players.
+  for(const plat of floats) {
+    if(plat.width>=85 && plat.width<110 && plat.y<500 && plat.x<400) {
+      tree(ctx,plat.x+plat.width*.5,plat.y,29,8);
+    }
+    if(plat.width>=130 && plat.width<160 && plat.y>=500 && plat.y<550) {
+      snowman(ctx,plat.x+plat.width*.5,plat.y,34);
     }
   }
-  const bridge=floats.find(p=>p.width>=350);
-  if(bridge) for(let i=0;i<6;i++) icicle(ctx,bridge.x+30+i*60,bridge.y+bridge.height,8+(i%3)*2);
 }
 
 function paintGroundForeground(ctx: Ctx2D, arena: Arena): void {
   const y=arena.platforms[0].y;
-  tree(ctx,50,y,65,5); tree(ctx,1230,y,55,6);
-  snowballs(ctx,850,y);
-  bush(ctx,350,y,34,0); bush(ctx,960,y,30,1);
+  bush(ctx,300,y,62,0); bush(ctx,990,y,60,1);
+  snowballs(ctx,1105,y);
   drift(ctx,15,y,45); drift(ctx,1250,y,40);
 }
 
 function paintForeground(ctx: Ctx2D, arena: Arena): void {
   paintGroundForeground(ctx,arena);
-  for(const plat of getFloatingPlatforms(arena.platforms)) if(plat.width>=350) tree(ctx,plat.x+plat.width*.45,plat.y,28,7);
 }
 
 type CachedPiece = { canvas: OffscreenCanvas; x: number; y: number; width: number; height: number };
@@ -281,12 +318,6 @@ export function drawRoundGroveForeground(ctx: Ctx2D, arena: Arena): void {
     const ground=makePiece(0,groundTop,CANVAS_WIDTH,110,cachedCtx=>paintGroundForeground(cachedCtx,arena));
     if (!ground) { paintForeground(ctx,arena); return; }
     pieces.push(ground);
-    for(const plat of getFloatingPlatforms(arena.platforms)) if(plat.width>=350) {
-      const x=plat.x+plat.width*.45;
-      const piece=makePiece(x-30,plat.y-40,60,42,cachedCtx=>tree(cachedCtx,x,plat.y,28,7));
-      if (!piece) { paintForeground(ctx,arena); return; }
-      pieces.push(piece);
-    }
     foregroundCache.set(arena,pieces);
   }
   for(const piece of pieces) ctx.drawImage(piece.canvas,piece.x,piece.y,piece.width,piece.height);

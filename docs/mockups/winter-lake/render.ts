@@ -16,17 +16,20 @@ import { drawWinterVectorPlatformBack, drawWinterVectorPlatformFront } from '../
 import { drawTracedSvgBack, drawTracedSvgFront, preloadTracedBridge } from '../winter-platforms/tracedSvg';
 import { drawPropStudyBack, drawPropStudyFront, PROP_VARIANTS, type PropVariant } from '../winter-props/variants';
 import { drawIllustratedPropBack, drawIllustratedPropFront, ILLUSTRATED_PROP_VARIANTS, preloadPropAtlas, type IllustratedPropVariant } from '../winter-props/illustrated';
+import { drawRoundGroveBackground, type IglooVariant } from '../../../src/engine/arenas/packs/winterLakeRoundGroveProps';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
 const time = query.get('time') ?? 'day';
 const platformVariant = query.get('platform');
 const propVariant = query.get('props');
+const iglooVariant = query.get('igloo');
 if (!VARIANTS.includes(variant as Variant)) throw new Error(`Unknown background: ${variant}`);
 if (time !== 'day' && time !== 'night') throw new Error(`Unknown time: ${time}`);
 if (platformVariant && !PLATFORM_VARIANTS.includes(platformVariant as PlatformVariant)) throw new Error(`Unknown platform: ${platformVariant}`);
 if (propVariant && propVariant !== 'current' && !PROP_VARIANTS.includes(propVariant as PropVariant)
   && !ILLUSTRATED_PROP_VARIANTS.includes(propVariant as IllustratedPropVariant)) throw new Error(`Unknown props: ${propVariant}`);
+if (iglooVariant && !['blue-brick','snow-stone','arched-door'].includes(iglooVariant)) throw new Error(`Unknown igloo: ${iglooVariant}`);
 
 let seed = 7312;
 Math.random = () => {
@@ -49,6 +52,10 @@ if (propVariant && propVariant !== 'current') {
     theme.drawBackgroundNature = (ctx, currentArena) => drawPropStudyBack(ctx, currentArena, propVariant as PropVariant);
     theme.drawForegroundNature = (ctx, currentArena) => drawPropStudyFront(ctx, currentArena, propVariant as PropVariant);
   }
+}
+if (iglooVariant) {
+  if (propVariant && propVariant !== 'current') throw new Error('Igloo variants require current Canvas props');
+  theme.drawBackgroundNature = (ctx, currentArena) => drawRoundGroveBackground(ctx, currentArena, iglooVariant as IglooVariant);
 }
 if (platformVariant) {
   // The study's `current` background is the approved Pearl plate. Without a
@@ -160,9 +167,9 @@ state.players.forEach((player, i) => {
 });
 if (query.has('cover')) {
   // Player coordinates are their left edge; center each silhouette in its bush.
-  state.players[0].x = 332;
+  state.players[0].x = 282;
   state.players[0].y = 625;
-  state.players[3].x = 942;
+  state.players[3].x = 972;
   state.players[3].y = 625;
 }
 renderer.warmSpriteCache(state.players.map(player => player.character.name));
