@@ -70,6 +70,10 @@ The first playable painted replacement still left a dense row at ground level: t
 
 The snowmen's body and head now use a stronger cool-side gradient, a clipped underside shadow, and a restrained side crescent. The shading stays inside the dark oval outline; it adds volume without making the snow look like blue ice. The [day](paint-replacement-day.png), [night](paint-replacement-night.png), and [cover](paint-replacement-cover.png) captures above reflect this final spacing and shading. This is a composition change only: platform collision, spawn points, hazard placement, and bush draw order are unchanged.
 
+### Ice cube front projection
+
+The two ground ice cubes looked tucked into the same plane as the scenery. Their vector bodies now extend 9 logical pixels below the former ground line, with a narrow cool contact shadow. The snow-capped top edge stays at its original coordinate, and the `iceCube` platform rectangles and collision behavior are unchanged. This creates a modest foreground face without making the landing height misleading. Compare the [previous scene](cube-depth-before-day.png) with the [current day](paint-replacement-day.png) and [night](paint-replacement-night.png) captures; the change applies only to the two upright cubes, not the floating shelves or ground strip.
+
 Reproduce the implementation and igloo comparison captures with `node docs/mockups/winter-props/capture-round.mjs` while the worktree Vite server is running.
 
 `node docs/mockups/winter-props/benchmark-round.mjs` measures one construction and 500 cached foreground calls in headless Chromium. After the Meadow bush reuse and layout cleanup, one local run measured about 2.8 ms for the static background props, 6.1 ms for the foreground cache build, and 0.003 ms per cached foreground call. These are JavaScript enqueue timings in an isolated fixture, not GPU frame timings or a before/after gameplay benchmark.

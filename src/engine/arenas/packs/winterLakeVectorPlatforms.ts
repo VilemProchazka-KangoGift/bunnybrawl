@@ -5,6 +5,9 @@ import { CAP_DEPTH, capFrontY, skewPx } from '../../themes/drawPrimitives';
 // the canvas backing scale keeps the ink intact, including on forty-pixel steps.
 type Point = readonly [number, number];
 const ink = '#335567';
+// The cube's visible front face projects over the ground. Its collision rect
+// and snow-capped landing edge remain at the authored platform coordinates.
+const CUBE_FRONT_PROJECTION = 9;
 
 function random(seed: number): () => number {
   let state = seed | 0;
@@ -38,7 +41,7 @@ function paint(ctx: Ctx2D, p: Platform, ground: boolean): void {
   const x = p.x - extra;
   const w = p.width + (cube ? p.width * .3 : skewPx()) + extra * 2;
   const top = p.y - (cube ? p.width * .15 : CAP_DEPTH / 2);
-  const bottom = p.y + p.height;
+  const bottom = p.y + p.height + (cube ? CUBE_FRONT_PROJECTION : 0);
   const h = bottom - top;
   const side = cube ? 13 : small ? 5 : 9;
   const faceEnd = w - side;
@@ -56,6 +59,13 @@ function paint(ctx: Ctx2D, p: Platform, ground: boolean): void {
   ctx.translate(x, top);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+
+  if (cube) {
+    ctx.beginPath();
+    ctx.ellipse(w * .5, h - 3, w * .45, 5.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(29, 79, 101, .24)';
+    ctx.fill();
+  }
 
   // A single watertight silhouette under every facet prevents seams at any DPR.
   const body = () => {
