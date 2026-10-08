@@ -33,14 +33,27 @@ function oval(ctx: Ctx2D, x: number, y: number, rx: number, ry: number, fill: st
 }
 
 function snowOval(ctx: Ctx2D, x: number, y: number, rx: number, ry: number): void {
-  const shade=ctx.createRadialGradient(x-rx*.42,y-ry*.55,2,x+rx*.28,y+ry*.12,rx*1.8);
+  const shade=ctx.createLinearGradient(x-rx*.65,y-ry*.85,x+rx*.7,y+ry*.9);
   shade.addColorStop(0,'#ffffff');
-  shade.addColorStop(.52,'#f0f8f7');
-  shade.addColorStop(1,'#a5cbd7');
+  shade.addColorStop(.42,'#f4f9f7');
+  shade.addColorStop(.76,'#d5e5e9');
+  shade.addColorStop(1,'#8fb6c3');
   ctx.beginPath(); ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);
   ctx.fillStyle=shade; ctx.fill();
+  ctx.save(); ctx.clip();
+  // A cool underside and side crescent give each ball volume at match scale.
+  ctx.beginPath();
+  ctx.ellipse(x+rx*.22,y+ry*.83,rx*.85,ry*.31,-.14,0,Math.PI*2);
+  ctx.fillStyle='rgba(104, 154, 170, .30)'; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x+rx*.48,y-ry*.82);
+  ctx.bezierCurveTo(x+rx*.93,y-ry*.28,x+rx*.95,y+ry*.53,x+rx*.36,y+ry*.91);
+  ctx.bezierCurveTo(x+rx*.72,y+ry*.23,x+rx*.65,y-ry*.42,x+rx*.48,y-ry*.82);
+  ctx.closePath(); ctx.fillStyle='rgba(91, 142, 161, .20)'; ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);
   ctx.strokeStyle=INK; ctx.lineWidth=1.6; ctx.stroke();
-  mark(ctx,[[x-rx*.58,y-ry*.1],[x-rx*.42,y-ry*.48],[x-rx*.06,y-ry*.68]],'#ffffff',1.4);
+  mark(ctx,[[x-rx*.64,y-ry*.08],[x-rx*.53,y-ry*.43],[x-rx*.18,y-ry*.70]],'#ffffff',1.5);
 }
 
 function mark(ctx: Ctx2D, points: readonly [number, number][], color: string, width: number): void {
@@ -237,15 +250,6 @@ function igloo(ctx: Ctx2D, x: number, baseY: number, width: number, height: numb
   ctx.restore();
 }
 
-function snowballs(ctx: Ctx2D, x: number, baseY: number): void {
-  const balls = [[-29,-9,10],[-10,-9,11],[10,-9,10],[30,-8,8],[-19,-26,10],[1,-26,11],[20,-25,10],[0,-43,11]] as const;
-  for (const [dx,dy,r] of balls) {
-    oval(ctx,x+dx,baseY+dy,r,r*.94,'#d6edf2',INK,1.2);
-    oval(ctx,x+dx-2,baseY+dy-2,r*.65,r*.6,SNOW);
-    mark(ctx,[[x+dx+r*.35,baseY+dy+2],[x+dx+r*.65,baseY+dy+4]],SNOW_SHADE,1);
-  }
-}
-
 function drift(ctx: Ctx2D, x: number, y: number, width: number): void {
   ctx.beginPath(); ctx.moveTo(x-width/2,y);
   ctx.bezierCurveTo(x-width*.38,y-8,x-width*.17,y-7,x,y-3);
@@ -266,42 +270,32 @@ export function drawRoundGroveBackground(ctx: Ctx2D, arena: Arena, iglooVariant:
   // The ground landmarks sit in open intervals between the ice cubes and
   // cover bushes. In the old layout, shelves obscured both the igloo and snowman.
   // The left ground stays open for the spawn and the first bush.
-  snowman(ctx,485,y,84,true);
-  tree(ctx,615,y,56,2);
+  snowman(ctx,510,y,90,true);
   const paintedIgloo = iglooVariant === 'blue-brick' ? getWinterPropArt().igloo : null;
-  if (paintedIgloo) ctx.drawImage(paintedIgloo,690,y-91,194,91);
-  else igloo(ctx,iglooVariant==='arched-door'?685:700,y,
+  if (paintedIgloo) ctx.drawImage(paintedIgloo,660,y-91,194,91);
+  else igloo(ctx,iglooVariant==='arched-door'?650:660,y,
     iglooVariant==='arched-door'?165:155,iglooVariant==='arched-door'?76:85,iglooVariant);
-  tree(ctx,1195,y,58,3);
 
   const upperBridge=floats.find(p=>p.width>=350);
   if(upperBridge) {
-    tree(ctx,upperBridge.x+34,upperBridge.y,46,4);
-    snowman(ctx,upperBridge.x+112,upperBridge.y,39);
-    tree(ctx,upperBridge.x+upperBridge.width-34,upperBridge.y,44,5);
+    tree(ctx,upperBridge.x+42,upperBridge.y,68,4);
+    snowman(ctx,upperBridge.x+122,upperBridge.y,57);
+    tree(ctx,upperBridge.x+upperBridge.width-45,upperBridge.y,65,5);
     for(let i=0;i<5;i++) icicle(ctx,upperBridge.x+44+i*76,upperBridge.y+upperBridge.height,8+(i%3)*2);
   }
   const lowerBridge=floats.find(p=>p.width>=200 && p.width<350);
   if(lowerBridge) {
-    tree(ctx,lowerBridge.x+29,lowerBridge.y,39,6);
-    snowman(ctx,lowerBridge.x+lowerBridge.width-31,lowerBridge.y,35);
+    tree(ctx,lowerBridge.x+38,lowerBridge.y,61,6);
+    snowman(ctx,lowerBridge.x+lowerBridge.width-39,lowerBridge.y,54);
     icicle(ctx,lowerBridge.x+lowerBridge.width*.5,lowerBridge.y+lowerBridge.height,10);
   }
-  // A few shelf accents give scale; the tiny steps stay clear for players.
-  for(const plat of floats) {
-    if(plat.width>=85 && plat.width<110 && plat.y<500 && plat.x<400) {
-      tree(ctx,plat.x+plat.width*.5,plat.y,29,8);
-    }
-    if(plat.width>=130 && plat.width<160 && plat.y>=500 && plat.y<550) {
-      snowman(ctx,plat.x+plat.width*.5,plat.y,34);
-    }
-  }
+  // Narrow shelves stay clear for jumping players; readable props live on
+  // the two broad platforms instead of repeating at miniature scale.
 }
 
 function paintGroundForeground(ctx: Ctx2D, arena: Arena): void {
   const y=arena.platforms[0].y;
-  bush(ctx,290,y,62,0); bush(ctx,1000,y,60,1);
-  snowballs(ctx,1105,y);
+  bush(ctx,290,y,62,0); bush(ctx,1040,y,60,1);
   drift(ctx,15,y,45); drift(ctx,1250,y,40);
 }
 
