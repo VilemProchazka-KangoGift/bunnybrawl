@@ -13,3 +13,5 @@ Build: `node docs/mockups/running-afterimages/prepare.mjs` then `node docs/mocku
 Separate worktree: features/running-afterimages, synchronized to merged main bc851df before committing the study. Tiny heel puffs merged through PR #80 with all four CI gates passing.
 
 Additional variation: Drooping tapered ovals uses the same timing, shrink and opacity as Tapered ovals; each circle descends by up to 10 logical px as its alpha decays. Current and all five earlier panels remain unchanged. Browser verification covers six distinct variants and the retained reference.
+
+Shape round: Squash blobs, Bean shapes, Wispy teardrops, and Irregular clouds vary only the filled silhouette. They use the original 30 ms cadence, five-entry cap, 4/s fade, hue shifts and body-center placement. Small deterministic alternating tilt varies beans and tear tips without frame-to-frame random jitter. Original and prior oval studies remain alongside them. Browser checks cover ten distinct variants and the unchanged reference.

@@ -32,7 +32,9 @@ function drawTrailScene(ctx,atlas,name,time,index,surface,width,speed,left,invin
           if(index===4||index===5){const taper=.35+.65*image.alpha;rx*=taper;ry*=taper;alpha*=.9;if(index===5)drop=10*(1-image.alpha);}
         }
         ctx.fillStyle=`hsl(${Math.round((h+shift+360)%360)},${s}%,${l}%)`;
-        ctx.globalAlpha=alpha;ctx.beginPath();ctx.ellipse(-speed*age,-32+32*.55+drop,rx,ry,0,0,Math.PI*2);ctx.fill();
+        ctx.globalAlpha=alpha;
+        if(index>=6&&!invincible)drawTrailShape(ctx,-speed*age,-32+32*.55,index,image.time);
+        else{ctx.beginPath();ctx.ellipse(-speed*age,-32+32*.55+drop,rx,ry,0,0,Math.PI*2);ctx.fill();}
       });
     }
     // Identical selected heel puff shape, cadence, velocity and gravity in all panels.
@@ -40,4 +42,28 @@ function drawTrailScene(ctx,atlas,name,time,index,surface,width,speed,left,invin
   }
   ctx.globalAlpha=1; sprite(ctx,atlas,size,time<.1?0:1+Math.floor(elapsed/.12)%2);
   ctx.restore();
+}
+
+// Each filled silhouette shares the original trail's placement and lifecycle.
+function drawTrailShape(ctx,x,y,index,spawnTime){
+ const tilt=(Math.round(spawnTime*30)%2?1:-1);
+ ctx.save();ctx.translate(x,y);ctx.scale(12.16,12.16);ctx.beginPath();
+ if(index===6){
+  ctx.moveTo(-1.2,-.15);ctx.bezierCurveTo(-1.1,-.8,-.25,-1.02,.25,-.82);
+  ctx.bezierCurveTo(.7,-1.04,1.1,-.45,1.18,.1);ctx.bezierCurveTo(1.1,.77,.35,.64,-.1,.87);
+  ctx.bezierCurveTo(-.62,.93,-1.35,.52,-1.2,-.15);
+ }else if(index===7){
+  ctx.rotate(tilt*.22);ctx.moveTo(-1,-.5);ctx.bezierCurveTo(-.85,-1.15,.12,-1.05,.8,-.55);
+  ctx.bezierCurveTo(1.5,-.05,1.18,.96,.4,1);ctx.bezierCurveTo(-.3,1,-.48,.55,-.2,.12);
+  ctx.bezierCurveTo(.06,-.32,-1.28,.35,-1,-.5);
+ }else if(index===8){
+  ctx.moveTo(-1.6,tilt*.2);ctx.bezierCurveTo(-.72,-.18,-.48,-.96,.28,-.87);
+  ctx.bezierCurveTo(1.1,-.84,1.2,.18,.73,.65);ctx.bezierCurveTo(.18,1.12,-.55,.4,-1.6,tilt*.2);
+ }else{
+  ctx.moveTo(-1.28,.08);ctx.bezierCurveTo(-1.55,-.5,-.85,-.78,-.6,-.57);
+  ctx.bezierCurveTo(-.57,-1.27,.23,-1.17,.36,-.77);ctx.bezierCurveTo(.89,-1.03,1.31,-.5,1.04,-.08);
+  ctx.bezierCurveTo(1.52,.4,.83,.98,.42,.67);ctx.bezierCurveTo(.13,1.16,-.55,.94,-.64,.54);
+  ctx.bezierCurveTo(-1.13,.79,-1.55,.41,-1.28,.08);
+ }
+ ctx.closePath();ctx.fill();ctx.restore();
 }
