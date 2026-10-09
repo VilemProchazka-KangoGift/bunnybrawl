@@ -30,7 +30,7 @@ function draw(){ $('time').value=time;$('clock').textContent=time.toFixed(2);
  ctx.restore();canvas.setAttribute('aria-label',$('character').value+' '+$('impact').value+' '+canvas.parentElement.querySelector('h3').textContent);canvas.dataset.age=String(Math.max(0,time-.4)); });}
 $('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause':'Play'};$('time').oninput=()=>{time=Number($('time').value);playing=false;$('play').textContent='Play';draw()};for(const id of ['character','impact','surface','edge','shared','left','night','scale','speed'])$(id).onchange=draw;
 for(const i of Object.values(images))i.onload=draw;backdrop.onload=draw;new ResizeObserver(draw).observe(document.body);
-window.__groundStudy={baseline:(ctx,d)=>drawSurfaceDecals(ctx,{surfaceDecals:[d]}),ready:()=>Object.values(images).every(i=>i.complete&&i.naturalWidth)};
+window.__groundStudy={baseline:(ctx,d)=>drawSurfaceDecals(ctx,{surfaceDecals:[d]}),selected:(ctx,d)=>drawMark(ctx,9,d),ready:()=>Object.values(images).every(i=>i.complete&&i.naturalWidth)};
 function frame(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number($('speed').value))%6;last=now;draw();requestAnimationFrame(frame)}draw();requestAnimationFrame(frame);
 })();
 </script></body></html>

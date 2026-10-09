@@ -21,3 +21,7 @@ Added Wide zigzag split (two broad broken seams), Jagged fissures (three tapered
 ## Forked variations
 
 Added Wide forked spread, Fine branching web and Heavy split with forks, making eleven comparisons. These share the existing material lifetime, contact anchoring and horizontal clipping.
+
+## Selected implementation
+
+Fine branching web selected and implemented in rendering/surfaceImpact.ts. Eight fixed branching paths, 1.6px dark ink and a 0.45px material-colored inner line; mini marks use 0.7x scale, full marks 1x. Existing trigger thresholds, lifetimes, event transport, platform clipping and impact bursts are unchanged. The frozen original comparison remains intact; verify.mjs now compares the selected variant to production. TypeScript and 80 focused renderer/surface-impact Vitest tests passed; selected drawing pixel equality and gallery browser checks passed.
