@@ -100,7 +100,7 @@ export function drawParticles(ctx: Ctx2D, particles: Particle[], lead = 0): void
       lastColor = '';
       continue;
     }
-    if (p.shape === 'jumpCloud' || p.shape === 'landingCloud') {
+    if (p.shape === 'jumpCloud' || p.shape === 'landingCloud' || p.shape === 'heelCloud') {
       drawMovementPuff(ctx, p, lead);
       lastColor = ''; // Cloud fill changes the context color.
       continue;

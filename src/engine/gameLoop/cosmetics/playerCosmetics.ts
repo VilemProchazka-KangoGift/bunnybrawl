@@ -1,4 +1,4 @@
-import type { Arena, Player, PlayerSlot } from '../../types';
+import type { Arena, Player, PlayerSlot, ParticleShape } from '../../types';
 import {
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
 } from '../../constants';
@@ -31,10 +31,11 @@ export function updatePlayerCosmetics(
   effWalkSpeed: number,
   afterimageAccs: Accumulator<PlayerSlot>,
   footstepAccs: Accumulator<PlayerSlot>,
-  emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
+  emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string, shape?: ParticleShape) => void,
   playSound: (name: string) => void,
   arena: Arena,
   inCountdown: boolean,
+  heelAccs: Accumulator<PlayerSlot>,
 ): void {
   // animFrame advance moved to Simulator.fixedUpdate — animFrame is in the
   // snapshot, so advancing it on guest's local clock (which drifts vs host)
@@ -134,30 +135,15 @@ export function updatePlayerCosmetics(
         playSound(palette.footstepSound);
       }
 
-      if (!getSlowDevice()) {
-        const color = palette.dust;
-        const behind = player.facing === 'right' ? -1 : 1;
-        const sx = cx + behind * (player.width * 0.3);
-        const sy = fy - 1;
-        const baseSize = 1 + speedRatio * 1.4;
-        const baseLife = 0.16 + speedRatio * 0.12;
-
-        if (surface === 'metal' || surface === 'glass') {
-          // Sparks: smaller, faster, fewer.
-          emitParticle(sx, sy, behind * (40 + speedRatio * 30), -30 - Math.random() * 30,
-            baseLife * 0.7, 0.8 + Math.random() * 0.6, color);
-        } else if (surface === 'ice') {
-          if (Math.random() < 0.5) {
-            emitParticle(sx, sy, behind * (12 + speedRatio * 12), -8 - Math.random() * 12,
-              baseLife * 0.6, 0.6, color);
-          }
-        } else {
-          emitParticle(sx, sy, behind * (20 + speedRatio * 30), -10 - Math.random() * 25,
-            baseLife, baseSize, color);
-        }
-      }
+    }
+    if (!getSlowDevice() && heelAccs.advance(player.id, dt, .2)) {
+      const behind = player.facing === 'right' ? -1 : 1;
+      const scale = player.width / 32;
+      emitParticle(player.x + player.width / 2 + behind * player.width * .3,
+        player.y + player.height - 1, behind * 9, -4, .3, 2.8 * scale, '#FFF0DB', 'heelCloud');
     }
   } else {
+    heelAccs.clear(player.id);
     footstepAccs.clear(player.id);
   }
 

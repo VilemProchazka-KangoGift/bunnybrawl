@@ -1,4 +1,4 @@
-import type { Arena, MatchState, PlayerSlot } from '../../types';
+import type { Arena, MatchState, PlayerSlot, ParticleShape } from '../../types';
 import type { CosmeticSystem } from '../types';
 import type { ParticleSystem } from './ParticleSystem';
 import { updatePlayerCosmetics } from './playerCosmetics';
@@ -12,7 +12,8 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
 
   private afterimageAccumulators: Accumulator<PlayerSlot> = new Accumulator();
   private footstepAccumulators: Accumulator<PlayerSlot> = new Accumulator();
-  private readonly _emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void;
+  private heelAccumulators = new Accumulator<PlayerSlot>();
+  private readonly _emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string, shape?: ParticleShape) => void;
 
   constructor(
     state: MatchState,
@@ -25,14 +26,14 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
     this.arena = arena;
     this.effWalkSpeed = effWalkSpeed;
     this.playSound = playSound;
-    this._emitParticle = (x, y, vx, vy, life, size, color) => particleSystem.emitParticle(x, y, vx, vy, life, size, color);
+    this._emitParticle = (x, y, vx, vy, life, size, color, shape) => particleSystem.emitParticle(x, y, vx, vy, life, size, color, shape);
   }
 
   init(): void {}
 
   cosmeticUpdate(dt: number): void {
     for (const player of this.state.players) {
-      if (!player.active) continue;
+      if (!player.active) { this.heelAccumulators.clear(player.id); continue; }
 
       // Skip during hitstop (player is frozen)
       if (player.hitstopTimer > 0) continue;
@@ -44,6 +45,7 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
         this.playSound,
         this.arena,
         this.state.countdown > 0,
+        this.heelAccumulators,
       );
     }
   }
@@ -51,5 +53,6 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
   cleanup(): void {
     this.afterimageAccumulators.clear();
     this.footstepAccumulators.clear();
+    this.heelAccumulators.clear();
   }
 }

@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+const read=p=>fs.readFileSync(new URL(p,import.meta.url),'utf8');
+let t=read('../victory-celebration/template.html').replaceAll('victory','running').replaceAll('Victory','Running').replaceAll('Running celebration','Running dust').replaceAll('Current fireworks','Current').replaceAll('Fireworks + winner zoom','Tiny heel puffs').replaceAll('Winner bounce','Surface flecks').replaceAll('Carrot shower','None');
+t=t.replace(/ {6}const progress=[\s\S]*? {6}if\(backdrop.naturalWidth\)/,"      if(backdrop.naturalWidth)");
+t=t.replace('ctx.restore();ctx.restore();','ctx.restore();');
+t=t.replace("drawRunningScene(ctx,characterImages[character.value],character.value,time,index===1?0:index,w/z)","drawRunningScene(ctx,characterImages[character.value],character.value,time,index,surface.value,w/z)");
+t=t.replace('    <button class="btn"', '    <label class="form-label">Surface <select class="form-select" id="running-surface"><option>grass</option><option>stone</option><option>wood</option><option>snow</option><option>sand</option><option>ice</option><option>metal</option><option>glass</option></select></label>\n    <button class="btn"');
+t=t.replace("  const canvases=","  const surface=root.querySelector('#running-surface');\n  const canvases=").replace('[character,speed,scale,night,','[surface,character,speed,scale,night,').replace('night:night.checked','surface:surface.value,night:night.checked').replace('night.checked=!!p.night;','night.checked=!!p.night;if(p.surface)surface.value=p.surface;');
+t=t.replace("ctx.fillStyle=night.checked?'#627958':'#9FB875';","ctx.fillStyle=surfaceGround[surface.value];").replace("time>=.4?', celebrating':', ready'","time>=.1?', running':', ready'");
+fs.writeFileSync(new URL('./template.html',import.meta.url),t);
+fs.writeFileSync(new URL('./build-study.mjs',import.meta.url),read('../victory-celebration/build-study.mjs').replaceAll('Victory celebration comparisons','Running dust comparisons').replaceAll('victory-cue','running-dust'));

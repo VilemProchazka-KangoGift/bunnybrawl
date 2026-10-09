@@ -265,7 +265,7 @@ export interface Particle {
 }
 
 /** Movement clouds expand and fade; spikes align with velocity. */
-export type ParticleShape = 'circle' | 'spike' | 'jumpCloud' | 'landingCloud' | 'impactCrown' | 'carrotChip' | 'carrotLeaf' | 'thornJolt' | 'respawnCloud' | 'burnCough';
+export type ParticleShape = 'circle' | 'spike' | 'jumpCloud' | 'landingCloud' | 'impactCrown' | 'carrotChip' | 'carrotLeaf' | 'thornJolt' | 'respawnCloud' | 'burnCough' | 'heelCloud';
 
 export type GibType = 'ear' | 'tail' | 'body' | 'snout' | 'horn' | 'wing' | 'beard' | 'mane' | 'wool' | 'spine';
 
