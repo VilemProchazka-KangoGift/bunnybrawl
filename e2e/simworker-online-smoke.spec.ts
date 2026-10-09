@@ -182,6 +182,16 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
     await pair.guest.keyboard.down('d');
     try {
       await pair.host.waitForFunction(() => (window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 0) > 0, undefined, { timeout: 8000 });
+    } catch (error) {
+      console.error('Held guest input timeout', await pair.host.evaluate(() => {
+        const state = window.__bunnyTest!.state();
+        const match = window.__bunnyTest!.netMatch() as unknown as { hostAuthority: HostAuthority };
+        const player = state?.players.find(p => p.id === 'P2');
+        return { phase: state?.phase, countdown: state?.countdown,
+          player: player && { x: player.x, y: player.y, vx: player.vx, vy: player.vy, state: player.state, active: player.active },
+          input: match.hostAuthority.getNetworkInputs().get('P2') };
+      }));
+      throw error;
     } finally { await pair.guest.keyboard.up('d'); }
     await pair.host.waitForFunction(() => Math.abs(window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 1) < 1, undefined, { timeout: 8000 });
     expect(await pair.host.evaluate(() => (window as Window & { __guestJumpReads: number }).__guestJumpReads)).toBe(1);
