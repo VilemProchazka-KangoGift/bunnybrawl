@@ -311,5 +311,5 @@ Per-frame allocators eliminated in the 2026-05 GC pass (see commits ab6dafc, 0ff
 | Rooftops | Medium | Pigeon flocks, wind, nail gradients on thorns |
 | Haunted Graveyard | Medium | Ghosts, fog, day/night, fireflies |
 | Treetops | Medium | Dense foliage, wind, wildlife |
-| Winter Lake | Light | Snow weather, simple decorations |
+| Winter Lake | Recheck after redesign | Snow weather and aurora remain animated; illustrated backdrop and detailed Canvas ice are cached, as are fixed props and foreground cover. Earlier isolated construction timings do not establish current frame or entry cost; see the [Winter Lake review gates](../../docs/mockups/winter-lake/LESSONS.md#production-and-review-gates). |
 | Meadow | **Lightest** | Minimal effects, simple decorations |

@@ -9,7 +9,7 @@ This is the atmosphere pass in [phase 5 of the arena redesign sequence](../../..
 | ![Winter Lake before the atmosphere change, day](current-day.png) | ![Selected Glacier Teal production grade, day](selected-teal-day.png) |
 | ![Winter Lake before the atmosphere change, night](current-night.png) | ![Selected Glacier Teal production grade with original aurora, night](selected-teal-night.png) |
 
-The selected grade changes the sky, painted distance, fixed props, clouds, and fog. The vector platforms keep their existing blue ink for separation from the teal shore. Characters, hazards, spring, carrot, and the animated aurora retain their original color and shape. The background and fixed-prop caches contain the filter work; it is not applied as a full-screen per-frame effect. Live gameplay was checked in both simulation-worker modes at native size.
+The selected grade changes the sky, painted distance, fixed props, clouds, and fog. The vector platforms keep their existing blue ink for separation from the teal shore. Characters, hazards, spring, carrot, and the animated aurora retain their original color and shape. The background and fixed-prop caches contain the filter work; it is not applied as a full-screen per-frame effect. Live daylight gameplay and arena switching were checked in both simulation-worker modes at native size. Moving dusk/night, smaller displays, and the full roster remain part of the [integrated play review](../winter-lake/LESSONS.md#production-and-review-gates).
 
 ## Original selection study
 
