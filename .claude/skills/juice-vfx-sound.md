@@ -225,3 +225,11 @@ The [speed trail study](../../docs/mockups/running-afterimages/README.md) keeps 
 Ordinary speed afterimages use drawSpeedCloud in movementEffects.ts, the selected six-lobe filled cloud silhouette. Keep the original afterimage emitter, hue and alpha behavior; protection uses blue ovals as a separate status cue. Tiny heel puffs remain 2.8 px clouds every 200 ms and can be visually masked by body-height speed trails. Confirm heelCloud in the real particle pool rather than judging emission from a busy arena screenshot. Keep the selected study alongside native-size live captures.
 
 Running heel-puff follow-up: the user removed Tiny heel puffs after selecting Irregular clouds because the tiny accent was not visible beside the speed trail. Match running now emits no footstep particles; preserve surface-aware footstep audio. Comparison pages are historical studies.
+
+### Protection-trail comparisons
+
+The invincibility study in docs/mockups/invincibility-trail keeps the 1.5-second protection timer and 100 ms half-opacity blink identical across candidates. Original protection afterimages emit even at zero speed, so compare standing and running. Include expiry frames: every variant must return to the same ordinary speed clouds after protection ends. Freeze the current emitter and use authored character sizes.
+
+### Small shield sparks
+
+Protection uses four small shoulder diamonds in rendering/protectionEffects.ts, driven directly by invincibleTimer and INVINCIBLE_DURATION. Keep the existing sprite blink. Draw even with an empty afterimage buffer so stationary protected players have the cue. Preserve ordinary speed clouds after expiry and the existing dive/slow-device suppression. Validate natural respawns in both simulation-worker modes after entrance clouds fade.

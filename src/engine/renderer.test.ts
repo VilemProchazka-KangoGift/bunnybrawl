@@ -1,3 +1,4 @@
+import * as protectionEffects from './rendering/protectionEffects';
 import * as movementEffects from './rendering/movementEffects';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { appendCloudPath } from './themes/drawPrimitives';
@@ -518,8 +519,9 @@ describe('Renderer — renderFrame conditional branches', () => {
     expect(renderer.getDiagnostics().afterimages).toBe(true);
   });
 
-  it('uses irregular clouds for speed trails while retaining protection ovals', () => {
+  it('uses shield sparks during protection, including when standing still', () => {
     const cloud = vi.spyOn(movementEffects, 'drawSpeedCloud');
+    const sparks = vi.spyOn(protectionEffects, 'drawShieldSparks');
     const state = makeState();
     state.players[0].invincibleTimer = 0;
     state.players[0].afterimages = [{ x: 190, y: 620, alpha: .5 }];
@@ -529,6 +531,14 @@ describe('Renderer — renderFrame conditional branches', () => {
     state.players[0].invincibleTimer = 1;
     renderer.renderFrame(state, makeArena(), []);
     expect(cloud).not.toHaveBeenCalled();
+    expect(sparks).toHaveBeenCalledTimes(1);
+    state.players[0].afterimages = [];
+    renderer.renderFrame(state, makeArena(), []);
+    expect(sparks).toHaveBeenCalledTimes(2);
+    state.players[0].invincibleTimer = 0;
+    renderer.renderFrame(state, makeArena(), []);
+    expect(sparks).toHaveBeenCalledTimes(2);
+    sparks.mockRestore();
     cloud.mockRestore();
   });
 
