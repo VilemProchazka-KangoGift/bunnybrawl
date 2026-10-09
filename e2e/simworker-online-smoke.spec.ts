@@ -173,12 +173,16 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
         return inputs;
       };
     });
+    const jumpStartY = await pair.host.evaluate(() => window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!.y);
     await pair.guest.evaluate(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
       window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' }));
     });
     await pair.host.waitForFunction(() => (window as Window & { __guestJumpReads?: number }).__guestJumpReads === 1, undefined, { timeout: 8000 });
     // Exercise held movement and release over real WebRTC, not just an idle soak.
+    // Input can be read before the worker publishes the jump's first frame.
+    // Observe vertical movement before accepting idle as the post-jump landing.
+    await pair.host.waitForFunction(startY => Math.abs(window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!.y - startY) > 1, jumpStartY, { timeout: 8000 });
     // Let the latched jump land before choosing a clear movement direction.
     await pair.host.waitForFunction(() => ['idle', 'run'].includes(window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!.state), undefined, { timeout: 8000 });
     // Meadow spawns can be flush against either side of a stump.
