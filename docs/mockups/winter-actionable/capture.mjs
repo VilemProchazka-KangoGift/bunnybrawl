@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const server = process.env.WINTER_ACTION_URL ?? 'http://127.0.0.1:4240/bunnybrawl/';
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  ...(process.env.WINTER_ACTION_CHROMIUM ? { executablePath: process.env.WINTER_ACTION_CHROMIUM } : {}),
+});
 try {
   for (const action of ['current', 'ink-bell', 'crystal-bloom', 'carved-puck']) {
     for (const time of ['day', 'night']) {

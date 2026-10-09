@@ -16,34 +16,87 @@ function trace(ctx: Ctx2D, fill: string, stroke = '#304254', lineWidth = 2): voi
 
 function shard(ctx: Ctx2D, cx: number, baseY: number, width: number, height: number,
   lean: number, fill: string, edge: string): void {
+  const tipX = cx + lean;
   ctx.beginPath();
   ctx.moveTo(cx - width * .55, baseY);
   ctx.quadraticCurveTo(cx - width * .42, baseY - height * .28, cx + lean * .5 - width * .25, baseY - height * .66);
-  ctx.lineTo(cx + lean, baseY - height);
-  ctx.lineTo(cx + lean + width * .27, baseY - height * .45);
+  ctx.lineTo(tipX, baseY - height);
+  ctx.lineTo(tipX + width * .27, baseY - height * .45);
   ctx.lineTo(cx + width * .55, baseY);
   ctx.closePath();
   trace(ctx, fill, edge, 1.8);
+  // Two broad planes give the small crystal body volume without noisy speckles.
+  ctx.fillStyle = 'rgba(29,69,99,.48)';
+  ctx.beginPath();
+  ctx.moveTo(tipX, baseY - height + 1);
+  ctx.lineTo(tipX + width * .27, baseY - height * .45);
+  ctx.lineTo(cx + width * .55 - 1, baseY - 1);
+  ctx.lineTo(cx + width * .05, baseY - 1);
+  ctx.closePath();
+  ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,.52)';
   ctx.beginPath();
-  ctx.moveTo(cx + lean, baseY - height + 3);
-  ctx.lineTo(cx + lean - width * .22, baseY - height * .4);
+  ctx.moveTo(tipX, baseY - height + 3);
+  ctx.lineTo(tipX - width * .22, baseY - height * .4);
   ctx.lineTo(cx - width * .14, baseY - 3);
   ctx.lineTo(cx + width * .06, baseY - 3);
   ctx.closePath();
   ctx.fill();
+  ctx.strokeStyle = 'rgba(235,249,250,.62)';
+  ctx.lineWidth = .8;
+  ctx.beginPath();
+  ctx.moveTo(cx - width * .3, baseY - height * .12);
+  ctx.lineTo(tipX - width * .09, baseY - height * .78);
+  ctx.stroke();
 }
 
 function snowFoot(ctx: Ctx2D, x: number, y: number, width: number): void {
-  ctx.fillStyle = '#d9e9ef';
+  ctx.fillStyle = '#7a9eaf';
   ctx.strokeStyle = '#546b7b';
   ctx.lineWidth = 1.7;
   ctx.beginPath();
-  ctx.moveTo(x - width * .52, y);
-  ctx.quadraticCurveTo(x - width * .27, y - 5, x + width * .03, y - 3);
-  ctx.quadraticCurveTo(x + width * .33, y - 5, x + width * .52, y);
+  ctx.moveTo(x - width * .52, y - 1);
+  ctx.quadraticCurveTo(x - width * .27, y - 6, x + width * .03, y - 4);
+  ctx.quadraticCurveTo(x + width * .33, y - 6, x + width * .52, y - 1);
+  ctx.lineTo(x + width * .36, y + 1);
+  ctx.lineTo(x - width * .43, y + 1);
   ctx.closePath();
   ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#e6f2f4';
+  ctx.beginPath();
+  ctx.moveTo(x - width * .46, y - 2);
+  ctx.quadraticCurveTo(x - width * .2, y - 6, x + width * .03, y - 4);
+  ctx.quadraticCurveTo(x + width * .28, y - 6, x + width * .45, y - 2);
+  ctx.quadraticCurveTo(x + width * .08, y - 3, x - width * .17, y - 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function hangingIcicle(ctx: Ctx2D, cx: number, rootY: number, width: number, length: number,
+  lean: number, variant: ActionVariant): void {
+  const tipX = cx + lean;
+  const fill = variant === 'crystal-bloom' ? '#b9d7e6' : '#a8d7e7';
+  const edge = variant === 'crystal-bloom' ? '#667897' : '#476779';
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = 1.15;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - width * .57, rootY);
+  ctx.quadraticCurveTo(cx - width * .48, rootY + length * .18, cx - width * .28, rootY + length * .38);
+  ctx.quadraticCurveTo(cx - width * .19, rootY + length * .7, tipX - 1.2, rootY + length - 1.2);
+  ctx.quadraticCurveTo(tipX, rootY + length + .3, tipX + 1.2, rootY + length - 1.2);
+  ctx.quadraticCurveTo(cx + width * .22, rootY + length * .48, cx + width * .39, rootY + length * .17);
+  ctx.lineTo(cx + width * .54, rootY);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.67)';
+  ctx.beginPath();
+  ctx.moveTo(cx - width * .31, rootY + 1);
+  ctx.quadraticCurveTo(cx - width * .17, rootY + length * .43, tipX - 1, rootY + length * .84);
+  ctx.lineTo(cx - width * .03, rootY + length * .36);
+  ctx.closePath();
+  ctx.fill();
 }
 
 export function drawActionThorn(ctx: Ctx2D, x: number, y: number, width: number, height: number,
@@ -74,21 +127,25 @@ export function drawActionThorn(ctx: Ctx2D, x: number, y: number, width: number,
 export function drawActionZone(ctx: Ctx2D, x: number, y: number, width: number, height: number,
   variant: ActionVariant): void {
   ctx.save();
-  ctx.fillStyle = '#789bac';
-  ctx.strokeStyle = '#263e50'; ctx.lineWidth = 1.8;
+  // Connected frozen lip, with uneven drips growing down from it. Keep the
+  // points near the actual collision band rather than lengthening the hazard.
+  ctx.fillStyle = '#b8dce7';
+  ctx.strokeStyle = '#48697c'; ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.moveTo(x - 2, y - 2); ctx.lineTo(x + width + 2, y - 2);
-  ctx.lineTo(x + width, y + 3); ctx.lineTo(x, y + 3); ctx.closePath();
+  ctx.moveTo(x - 2, y - 2);
+  ctx.lineTo(x + width + 2, y - 2);
+  ctx.lineTo(x + width, y + 2);
+  ctx.quadraticCurveTo(x + width * .81, y + 3, x + width * .69, y + 1);
+  ctx.quadraticCurveTo(x + width * .48, y + 4, x + width * .32, y + 2);
+  ctx.quadraticCurveTo(x + width * .12, y + 4, x, y + 1);
+  ctx.closePath();
   ctx.fill(); ctx.stroke();
   const fringe = variant === 'carved-puck'
-    ? [[.13, .69, 12, -1], [.37, 1, 14, 1], [.68, .86, 15, -1], [.91, .58, 11, 1]]
-    : [[.1, .55, 9, -2], [.29, .94, 12, 1], [.51, .73, 10, -1], [.75, 1, 13, 2], [.94, .54, 8, 1]];
+    ? [[.12, .55, 8, -1], [.36, .96, 11, 1], [.66, .78, 10, 0], [.91, .44, 7, 1]]
+    : [[.09, .43, 7, -1], [.28, .88, 10, 0], [.51, .58, 8, -1], [.74, 1, 11, 1], [.94, .38, 6, 0]];
   for (const [position, scale, widthPx, lean] of fringe) {
     const cx = x + width * position;
-    const h = (height + 2) * scale;
-    shard(ctx, cx, y + 1, widthPx, -h, lean,
-      variant === 'crystal-bloom' ? '#a9d9e9' : '#80bbcf',
-      variant === 'crystal-bloom' ? '#596483' : '#284354');
+    hangingIcicle(ctx, cx, y + 1, widthPx, (height + 1) * scale, lean, variant);
   }
   ctx.restore();
 }
