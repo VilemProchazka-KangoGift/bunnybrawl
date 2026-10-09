@@ -1,0 +1,20 @@
+import fs from 'node:fs';
+const source=new URL('../running-afterimages/',import.meta.url),target=new URL('.',import.meta.url);
+const read=n=>fs.readFileSync(new URL(n,source),'utf8').replace(/\r\n/g,'\n');
+let t=read('template.html');
+t=t.replace(/ {2}<p>[\s\S]*?<div class="viz-controls">/, '  <p>Protection begins at 0.1s and ends at 1.6s. Every option keeps the current 100ms half-opacity blink. No footstep puffs.</p>\n  <div class="viz-controls">');
+t=t.replace('Running speed trails','Invincibility trail').replace('Running timing','Protection timing');
+t=t.replace('    <label class="form-check"><input id="trail-protected" type="checkbox">Invincible (unchanged)</label>\n','');
+t=t.replace('<option value="200">200 px/s · threshold</option>', '<option value="0">Standing still</option>');
+const names=['Current blue ovals','Blue irregular clouds','Small shield sparks','Blinking only'];
+const panels=names.map(name=>`<section><h3>${name}</h3><canvas role="img"></canvas><label class="form-check"><input type="radio" name="trail-choice" value="${name}">${name}</label></section>`).join('\n');
+t=t.replace(/ {2}<div class="trail-panels">[\s\S]*? {2}<\/div>\n<\/div>/, '  <div class="trail-panels">'+panels+'\n  </div>\n</div>');
+t=t.replace(",protectedRun=root.querySelector('#trail-protected')",'').replace('velocity,left,protectedRun,','velocity,left,').replace('drawTrailScene(', 'drawProtectionScene(').replace(',left.checked,protectedRun.checked',',left.checked').replaceAll('4.2','3.2');
+fs.writeFileSync(new URL('template.html',target),t);
+fs.writeFileSync(new URL('build-study.mjs',target),read('build-study.mjs').replace('Running speed trail comparisons','Invincibility trail comparisons').replace('Built ten running-afterimage studies.','Built four invincibility studies.'));
+const v=read('variants.js');
+const helpers=v.slice(0,v.indexOf('/*__BASELINE__*/'))+v.slice(v.indexOf('function hsl(hex)'),v.indexOf('function drawTrailScene('));
+// Remove the unused footstep helper; preserve roster, ground palette and sprite helper.
+const cleaned=helpers.replace(/function puff\([\s\S]*?\nfunction sprite/, 'function sprite');
+const cloud=v.slice(v.indexOf('function drawTrailShape('));
+fs.writeFileSync(new URL('variants.js',target),cleaned+'\n/*__BASELINE__*/\n'+cloud+fs.readFileSync(new URL('scene.js',target),'utf8'));
