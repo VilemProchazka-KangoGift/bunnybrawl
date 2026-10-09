@@ -15,3 +15,5 @@ Additional splash options: Rolling lava lobes (low rounded mass), Forked splash 
 Combined splash study: Rolling lobes + droplets preserves the selected lobe silhouette with seven full-sized molten drops; Wide rolling wave, Curling wings and Rounded crown explore different splash silhouettes with the same drop count and lifetime. Originals remain above the combined section.
 
 Selected for production: Wide rolling wave + droplets. Lava now uses the chosen drawing; water rings, emission conditions, lifetime, slow-device suppression and shared Ember cough remain unchanged. The gallery keeps the original frozen Current and checks selected-production pixel equality.
+
+Live verification: default simulation-worker mode observed the selected wave path on the actual worker canvas during a natural Volcano entry. In simWorker=off, the fixture waits for countdown completion, places Bunny above the lava with downward velocity, then observes a real emitted lava packet and captures the full scene. Cosmetic packets are omitted from the engine-worker main-thread mirror; do not assert ripple presence on that mirror.
