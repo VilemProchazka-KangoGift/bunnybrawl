@@ -16,6 +16,21 @@ import {
 } from '../../themes/drawPrimitives';
 import { applyIsoInsets } from '../../themes/drawPrimitives';
 
+// Applied only while building the backdrop and fixed-prop caches.
+// Filtering the detailed vector platforms during arena switching stalls the
+// simulation worker; their existing blue ink also separates them from the teal shore.
+// Moving the grade into the per-frame scene tint would recolor players and hazards.
+const BACKDROP_GRADE = 'hue-rotate(-28deg) saturate(1.22)';
+const SCENERY_GRADE = 'hue-rotate(-14deg) saturate(1.1)';
+const BACKDROP_WASH = 'rgba(53,171,171,.12)';
+
+function drawBackdropWash(ctx: Ctx2D): void {
+  ctx.save();
+  ctx.fillStyle = BACKDROP_WASH;
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  ctx.restore();
+}
+
 const AURORA_STRIPES = [
   { color: '#7be0a3', y: 56,  h: 64, speed: 0.6,  phase: 0   },
   { color: '#c899ff', y: 120, h: 64, speed: 0.55, phase: 2.4 },
@@ -150,10 +165,10 @@ export const winterLake: ArenaPack = {
   // ---- Visual config ----
   sky: {
     gradient: [
-      { offset: 0, color: '#3D5573' },
-      { offset: 0.43, color: '#7E9AAD' },
-      { offset: 0.78, color: '#BCD0D3' },
-      { offset: 1, color: '#DFE6E1' },
+      { offset: 0, color: '#245669' },
+      { offset: 0.43, color: '#73a9af' },
+      { offset: 0.78, color: '#bbd7d2' },
+      { offset: 1, color: '#e2efea' },
     ],
   },
 
@@ -166,7 +181,7 @@ export const winterLake: ArenaPack = {
   // ---- Ambient systems ----
   clouds: {
     count: 4,
-    color: 'rgba(200, 215, 230, 0.5)',
+    color: 'rgba(206, 244, 237, 0.52)',
     minSize: 50,
     maxSize: 80,
     minSpeed: 4,
@@ -194,7 +209,7 @@ export const winterLake: ArenaPack = {
     yVariance: 15,
     speedRange: [3, 8],
     alphaRange: [0.15, 0.35],
-    color: '#CCE0FF',
+    color: '#addbdb',
     sizeX: 50,
     sizeY: 10,
   },
@@ -218,12 +233,15 @@ export const winterLake: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
+    ctx.save();
+    ctx.filter = BACKDROP_GRADE;
     const image = getIllustratedBackdrop('winter_lake');
     if (image) {
-      ctx.save();
       ctx.globalAlpha = 0.75;
       ctx.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.globalAlpha = 1;
       ctx.restore();
+      drawBackdropWash(ctx);
       return;
     }
 
@@ -295,11 +313,23 @@ export const winterLake: ArenaPack = {
     ctx.fill();
 
     ctx.restore();
+    ctx.restore();
+    drawBackdropWash(ctx);
   },
 
-  drawBackgroundNature: drawRoundGroveBackground,
+  drawBackgroundNature: (ctx, arena) => {
+    ctx.save();
+    ctx.filter = SCENERY_GRADE;
+    drawRoundGroveBackground(ctx, arena);
+    ctx.restore();
+  },
 
-  drawForegroundNature: drawRoundGroveForeground,
+  drawForegroundNature: (ctx, arena) => {
+    ctx.save();
+    ctx.filter = SCENERY_GRADE;
+    drawRoundGroveForeground(ctx, arena);
+    ctx.restore();
+  },
 
   drawAnimatedBackground: (ctx, _arena, time, dayPhase) => {
     if (getSlowDevice()) return;
