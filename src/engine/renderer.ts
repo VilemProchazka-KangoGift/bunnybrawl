@@ -1,3 +1,4 @@
+import { drawShieldSparks } from './rendering/protectionEffects';
 import { drawSpeedCloud } from './rendering/movementEffects';
 import { VictoryCamera } from './rendering/victoryCamera';
 import { ThornRecoil } from './rendering/thornRecoil';
@@ -73,7 +74,6 @@ function getCachedHsl(hex: string): { h: number; s: number; l: number } {
   if (!v) { v = hexToHSL(hex); _hslCache.set(hex, v); }
   return v;
 }
-const _invincibleHsl = getCachedHsl('#88BBFF');
 
 /** Memoized `hsl(h,s%,l%)` strings for afterimage hue-shifted trails. Keyed by
  *  the rounded (h,s,l) integers that fully determine the string, so the hot
@@ -1326,13 +1326,17 @@ export class Renderer implements IRenderer {
           if (player.state === 'respawning') continue;
           // Movement uses cloud puffs / attack-pose echoes, not oval blobs.
           if (player.state === 'airborne' && (player.invincibleTimer <= 0 || (player.fastFalling && player.vy >= 0))) continue;
+          if (player.invincibleTimer > 0) {
+            d.afterimages = true;
+            if (!aiSaved) { ctx.save(); aiSaved = true; }
+            drawShieldSparks(ctx, player);
+            continue;
+          }
           const afterimages = player.afterimages;
           if (afterimages && afterimages.length > 0) {
             d.afterimages = true;
             if (!aiSaved) { ctx.save(); aiSaved = true; }
-            const baseHsl = player.invincibleTimer > 0
-              ? _invincibleHsl
-              : getCachedHsl(player.character.color);
+            const baseHsl = getCachedHsl(player.character.color);
             const rS = Math.round(baseHsl.s * 100);
             const rL = Math.round(baseHsl.l * 100);
             const total = afterimages.length;
@@ -1343,15 +1347,8 @@ export class Renderer implements IRenderer {
               const h = (baseHsl.h + shift + 360) % 360;
               ctx.fillStyle = afterimageHslString(Math.round(h), rS, rL);
               ctx.globalAlpha = img.alpha;
-              if (player.invincibleTimer > 0) {
-                ctx.beginPath();
-                ctx.ellipse(img.x + player.width / 2, img.y + player.height * .55,
-                  player.width * .38, player.height * .38, 0, 0, Math.PI * 2);
-                ctx.fill();
-              } else {
-                drawSpeedCloud(ctx, img.x + player.width / 2, img.y + player.height * .55,
-                  player.width * .38, player.height * .38);
-              }
+              drawSpeedCloud(ctx, img.x + player.width / 2, img.y + player.height * .55,
+                player.width * .38, player.height * .38);
             }
           }
         }

@@ -229,3 +229,7 @@ Running heel-puff follow-up: the user removed Tiny heel puffs after selecting Ir
 ### Protection-trail comparisons
 
 The invincibility study in docs/mockups/invincibility-trail keeps the 1.5-second protection timer and 100 ms half-opacity blink identical across candidates. Original protection afterimages emit even at zero speed, so compare standing and running. Include expiry frames: every variant must return to the same ordinary speed clouds after protection ends. Freeze the current emitter and use authored character sizes.
+
+### Small shield sparks
+
+Protection uses four small shoulder diamonds in rendering/protectionEffects.ts, driven directly by invincibleTimer and INVINCIBLE_DURATION. Keep the existing sprite blink. Draw even with an empty afterimage buffer so stationary protected players have the cue. Preserve ordinary speed clouds after expiry and the existing dive/slow-device suppression. Validate natural respawns in both simulation-worker modes after entrance clouds fade.

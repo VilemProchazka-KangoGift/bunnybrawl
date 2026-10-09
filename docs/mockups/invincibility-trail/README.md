@@ -9,3 +9,9 @@ After expiry all panels display the selected ordinary speed clouds above 200 px/
 Build: node docs/mockups/invincibility-trail/prepare.mjs, then node docs/mockups/invincibility-trail/build-study.mjs. Verify: node docs/mockups/invincibility-trail/verify.mjs with Vite on port 4235 and a matching installed Playwright browser. Browser checks passed for distinct cues, blink, identical pre/post protection frames, 19 characters, standing/running/left direction, eight surfaces, night, 2× and 360 px layout. Captures inspected. Tool ESLint passed. This docs-only study changes no production source; production build, Vitest and game E2E not rerun.
 
 Separate worktree features/invincibility-trail starts at fetched main a3b3de5. No variant is selected by default.
+
+## Selected implementation
+
+Small shield sparks selected. Runtime replaces protected blue ovals with four body-relative diamonds driven by the existing 1.5 s timer, including when standing still. The original blink, ordinary speed clouds, dive suppression and slow-device suppression stay intact. No particle or snapshot format changes.
+
+Validation: TypeScript build, changed-file ESLint, Vite production build, 67 renderer Vitest tests and seven production Playwright smoke tests passed. Natural respawn captures in default simulation-worker and simWorker=off modes passed without browser errors. Full Vitest and full E2E suites were not run. Playtest: /bunnybrawl/?arena=meadow&bots=4 on port 4235.
