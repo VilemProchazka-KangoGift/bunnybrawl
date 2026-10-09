@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ground impact comparisons</title><style>
+body{font:14px system-ui;margin:20px auto;padding:0 16px;max-width:1000px;background:#faf8f3;color:#332b25} .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center}label{display:inline-flex;gap:6px;align-items:center}select,button{font:inherit;padding:8px}input[type=range]{width:100%}.panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}canvas{display:block;width:100%;height:220px}h3{font-size:15px}@media(max-width:560px){.panels{grid-template-columns:1fr}}
+</style></head><body><h2>Ground impact marks</h2><p>Land at 0.4s. Compare the marks alongside the current side puffs or impact crown, then watch the character move away. Current marks last 5s; ice 3s, glass 2s. Scrub near impact and after the burst fades.</p>
+<div class="controls">
+<label>Character <select id="character"></select></label><label>Impact <select id="impact"><option value="stomp">Fast stomp</option><option value="landing">Hard landing</option></select></label>
+<label>Surface <select id="surface"><option>grass</option><option>stone</option><option>wood</option><option>snow</option><option>sand</option><option>ice</option><option>metal</option><option>glass</option></select></label>
+<label>Contact <select id="edge"><option value="0">Clear ground</option><option value="1">Narrow ledge · near edge</option></select></label>
+<label><input id="shared" type="checkbox" checked>Existing impact effects</label><label><input id="left" type="checkbox">Left</label><label><input id="night" type="checkbox">Night</label>
+<label>Scale <select id="scale"><option value="1">Game size</option><option value="2">2× detail</option></select></label><label>Speed <select id="speed"><option value="1">Normal</option><option value=".35">Slow motion</option></select></label><button id="play">Pause</button></div>
+<label for="time">Timeline · <span id="clock">0.00</span>s</label><input id="time" type="range" min="0" max="6" step=".005" value="0">
+<div class="panels"><section><h3>Current cracks</h3><canvas role="img"></canvas></section><section><h3>Chunky comic cracks</h3><canvas role="img"></canvas></section><section><h3>Brief ground dent</h3><canvas role="img"></canvas></section><section><h3>No ground mark</h3><canvas role="img"></canvas></section></div>
+<h2 id="chunky-variations">More chunky cracks</h2><p>Same fade and contact timing. Compare silhouette, width and the amount of broken ground.</p>
+<div class="panels"><section><h3>Wide zigzag split</h3><canvas role="img"></canvas></section><section><h3>Jagged fissures</h3><canvas role="img"></canvas></section><section><h3>Broken plates</h3><canvas role="img"></canvas></section><section><h3>Sparse forked cracks</h3><canvas role="img"></canvas></section></div>
+<h2 id="forked-variations">More forked cracks</h2><p>Wider spread, finer branching, or a heavier main fracture. Same surface-dependent fade.</p>
+<div class="panels"><section><h3>Wide forked spread</h3><canvas role="img"></canvas></section><section><h3>Fine branching web</h3><canvas role="img"></canvas></section><section><h3>Heavy split with forks</h3><canvas role="img"></canvas></section></div>
+<p>Scripted motion study. Surface strips illustrate color and clipping; arena art, cover and gameplay physics are unchanged.</p>
+<script>
+(()=>{
+const sources=__CHARACTERS__,images=Object.fromEntries(Object.entries(sources).map(([n,s])=>{const i=new Image();i.src=s;return[n,i]}));const backdrop=new Image();backdrop.src='__BACKDROP__';
+/*__HELPERS__*/
+/*__BASELINE__*/
+/*__SCENE__*/
+const $=id=>document.getElementById(id);for(const n of Object.keys(sources))$('character').add(new Option(n,n));
+const canvases=[...document.querySelectorAll('canvas')];let time=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,last=0;
+function draw(){ $('time').value=time;$('clock').textContent=time.toFixed(2);
+ canvases.forEach((canvas,index)=>{const z=Number($('scale').value),h=z===2?340:220,w=canvas.clientWidth,dpr=Math.min(devicePixelRatio||1,2);canvas.style.height=h+'px';if(canvas.width!==Math.round(w*dpr)||canvas.height!==h*dpr){canvas.width=Math.round(w*dpr);canvas.height=h*dpr;}const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);ctx.fillStyle=$('night').checked?'#334451':'#ACD5DE';ctx.fillRect(0,0,w,h);if(backdrop.naturalWidth){ctx.globalAlpha=$('night').checked?.22:.6;ctx.drawImage(backdrop,230,240,480,300,0,0,w,h);ctx.globalAlpha=1;}ctx.save();ctx.translate(w/2,h-40);ctx.scale(z,z);
+ const edge=$('edge').value==='1',min=edge?-56:-w/z,max=edge?8:w/z,surface=$('surface').value;
+ ctx.fillStyle=surfaceGround[surface];ctx.fillRect(min,0,max-min,26);ctx.strokeStyle='#665344';ctx.lineWidth=1;ctx.strokeRect(min,0,max-min,26);
+ drawScene(ctx,images[$('character').value],$('character').value,time,index,surface,$('impact').value,$('shared').checked,$('left').checked,edge);
+ ctx.restore();canvas.setAttribute('aria-label',$('character').value+' '+$('impact').value+' '+canvas.parentElement.querySelector('h3').textContent);canvas.dataset.age=String(Math.max(0,time-.4)); });}
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause':'Play'};$('time').oninput=()=>{time=Number($('time').value);playing=false;$('play').textContent='Play';draw()};for(const id of ['character','impact','surface','edge','shared','left','night','scale','speed'])$(id).onchange=draw;
+for(const i of Object.values(images))i.onload=draw;backdrop.onload=draw;new ResizeObserver(draw).observe(document.body);
+window.__groundStudy={baseline:(ctx,d)=>drawSurfaceDecals(ctx,{surfaceDecals:[d]}),selected:(ctx,d)=>drawMark(ctx,9,d),ready:()=>Object.values(images).every(i=>i.complete&&i.naturalWidth)};
+function frame(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number($('speed').value))%6;last=now;draw();requestAnimationFrame(frame)}draw();requestAnimationFrame(frame);
+})();
+</script></body></html>

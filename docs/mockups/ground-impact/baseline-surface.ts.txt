@@ -1,18 +1,35 @@
 import type { Ctx2D } from '../types';
 import type { MatchState, SurfaceDecal } from '../types';
 import { SURFACE_RIPPLE_LIFE, SURFACE_RIPPLE_MAX_RADIUS } from '../constants';
+import { fastSin, fastCos } from '../fastMath';
 
-// Selected fine branching web; fixed points keep the authored silhouette stable.
-const FINE_CRACK_PATHS = [
-  [[0, 1], [-8, -2], [-17, -1], [-29, -4]],
-  [[-8, -2], [-12, -6], [-21, -8]],
-  [[-17, -1], [-22, 3], [-30, 4]],
-  [[0, 1], [9, 2], [18, -1], [29, 0]],
-  [[9, 2], [13, 6], [23, 8]],
-  [[18, -1], [22, -5], [28, -6]],
-  [[0, 1], [-2, 5], [-10, 9]],
-  [[-2, 5], [5, 8], [12, 9]],
-] as const;
+interface CrackStyle {
+  spokes: number;
+  len: number;        // base spoke length
+  alpha: number;      // multiplier on the per-decal fade
+  lineWidth: number;
+  dotRadius: number;
+  bifurcate: boolean; // emit secondary forks every other spoke
+}
+
+const CRACK_STYLES: Record<SurfaceDecal['kind'], (d: SurfaceDecal) => CrackStyle> = {
+  full: (d) => ({
+    spokes: 6,
+    len: d.surface === 'glass' ? 22 : 28,
+    alpha: 0.7,
+    lineWidth: 1.2,
+    dotRadius: 2,
+    bifurcate: true,
+  }),
+  mini: () => ({
+    spokes: 5,
+    len: 12,
+    alpha: 0.85,
+    lineWidth: 1.4,
+    dotRadius: 1.6,
+    bifurcate: false,
+  }),
+};
 
 export function drawSurfaceDecals(ctx: Ctx2D, state: MatchState): void {
   const decals = state.surfaceDecals;
@@ -23,7 +40,8 @@ export function drawSurfaceDecals(ctx: Ctx2D, state: MatchState): void {
     const d = decals[i];
     const t = d.age / d.life;
     if (t >= 1) continue;
-    drawFineCrackPattern(ctx, d, 1 - t);
+    const style = CRACK_STYLES[d.kind](d);
+    drawCrackPattern(ctx, d, 1 - t, style);
   }
   ctx.restore();
 }
@@ -54,27 +72,40 @@ function applyDecalClip(
   return true;
 }
 
-function drawFineCrackPattern(ctx: Ctx2D, d: SurfaceDecal, fade: number): void {
+function drawCrackPattern(
+  ctx: Ctx2D, d: SurfaceDecal, fade: number, style: CrackStyle,
+): void {
+  const { spokes, len, alpha, lineWidth, dotRadius, bifurcate } = style;
+  const baseAngle = d.seed * Math.PI * 2;
+
   ctx.save();
-  const radius = d.kind === 'full' ? 32 : 21;
-  if (!applyDecalClip(ctx, d, radius, radius)) { ctx.restore(); return; }
-  ctx.translate(d.x, d.y);
-  const scale = d.kind === 'full' ? 1 : .7;
-  ctx.scale(scale, scale);
-  ctx.globalAlpha = fade;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  for (const points of FINE_CRACK_PATHS) {
-    ctx.beginPath();
-    ctx.moveTo(points[0][0], points[0][1]);
-    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
-    ctx.strokeStyle = '#574C42';
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
-    ctx.strokeStyle = d.color;
-    ctx.lineWidth = .45;
-    ctx.stroke();
+  if (!applyDecalClip(ctx, d, len, len)) { ctx.restore(); return; }
+  ctx.globalAlpha = fade * alpha;
+  ctx.strokeStyle = d.color;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  for (let i = 0; i < spokes; i++) {
+    const a = baseAngle + (i / spokes) * Math.PI * 2 + (i % 2 ? 0.2 : -0.15);
+    const l = len * (0.6 + (((d.seed * 31 + i * 7) % 1) + 0) * 0.4);
+    const ex = d.x + fastCos(a) * l;
+    const ey = d.y + fastSin(a) * l * 0.35;  // flattened for ground perspective
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(ex, ey);
+    if (bifurcate && i % 2 === 0) {
+      const bx = d.x + fastCos(a) * (l * 0.55);
+      const by = d.y + fastSin(a) * (l * 0.55) * 0.35;
+      const fa = a + 0.5;
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + fastCos(fa) * (l * 0.3), by + fastSin(fa) * (l * 0.3) * 0.35);
+    }
   }
+  ctx.stroke();
+
+  ctx.globalAlpha = fade * 0.6;
+  ctx.fillStyle = d.color;
+  ctx.beginPath();
+  ctx.arc(d.x, d.y, dotRadius, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 

@@ -233,3 +233,11 @@ The invincibility study in docs/mockups/invincibility-trail keeps the 1.5-second
 ### Small shield sparks
 
 Protection uses four small shoulder diamonds in rendering/protectionEffects.ts, driven directly by invincibleTimer and INVINCIBLE_DURATION. Keep the existing sprite blink. Draw even with an empty afterimage buffer so stationary protected players have the cue. Preserve ordinary speed clouds after expiry and the existing dive/slow-device suppression. Validate natural respawns in both simulation-worker modes after entrance clouds fade.
+
+### Ground-impact mark comparisons
+
+Ground marks are independent of landing clouds and fast-stomp crowns. In docs/mockups/ground-impact, preserve the exact current surfaceImpact renderer and fastMath lookup tables as a frozen baseline, then compare heavier comic cracks, a brief dent and removal. Check after the transient impact burst fades and after the player moves away: current mini cracks persist five seconds, ice three and glass two. Verify platform-edge clipping, all surface palettes and both hard landings and fast stomps. Keep shared impact effects toggleable so a stronger crown does not hide differences in the ground mark.
+
+### Fine branching ground cracks
+
+Selected Fine branching web replaces ground crack spokes with eight thin branching paths, dark ink plus a surface-colored inner stroke. Author points once at module scope; full marks use 1x, mini marks 0.7x. Clip in world coordinates before translating/scaling the mark. Preserve emitter thresholds, five/three/two-second lifetimes, crown and landing puffs, and existing transported decal data. The gallery keeps the frozen original renderer; its verification now compares the selected fine-web drawing pixel-for-pixel to production.
