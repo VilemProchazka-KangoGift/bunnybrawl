@@ -179,9 +179,20 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
     });
     await pair.host.waitForFunction(() => (window as Window & { __guestJumpReads?: number }).__guestJumpReads === 1, undefined, { timeout: 8000 });
     // Exercise held movement and release over real WebRTC, not just an idle soak.
-    // Meadow's right spawn can be flush against the stump at x=860.
-    // Move inward so this checks delivered input rather than obstacle clearance.
-    const direction = await pair.host.evaluate(() => (window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!.x > 640 ? -1 : 1));
+    // Let the latched jump land before choosing a clear movement direction.
+    await pair.host.waitForFunction(() => ['idle', 'run'].includes(window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!.state), undefined, { timeout: 8000 });
+    // Meadow spawns can be flush against either side of a stump.
+    const direction = await pair.host.evaluate(() => {
+      const player = window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!;
+      const arena = window.__bunnyTest!.gameLoop()!.getArena();
+      let leftGap = player.x, rightGap = arena.width - player.x - player.width;
+      for (const platform of arena.platforms) {
+        if (player.y + player.height <= platform.y || player.y >= platform.y + platform.height) continue;
+        if (platform.x >= player.x + player.width) rightGap = Math.min(rightGap, platform.x - player.x - player.width);
+        if (platform.x + platform.width <= player.x) leftGap = Math.min(leftGap, player.x - platform.x - platform.width);
+      }
+      return leftGap > rightGap ? -1 : 1;
+    });
     const movementKey = direction < 0 ? 'a' : 'd';
     await pair.guest.keyboard.down(movementKey);
     try {
