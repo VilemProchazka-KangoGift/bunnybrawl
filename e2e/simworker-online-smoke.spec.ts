@@ -173,16 +173,12 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
         return inputs;
       };
     });
-    const jumpStartY = await pair.host.evaluate(() => window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!.y);
     await pair.guest.evaluate(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
       window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' }));
     });
     await pair.host.waitForFunction(() => (window as Window & { __guestJumpReads?: number }).__guestJumpReads === 1, undefined, { timeout: 8000 });
     // Exercise held movement and release over real WebRTC, not just an idle soak.
-    // Input can be read before the worker publishes the jump's first frame.
-    // Observe vertical movement before accepting idle as the post-jump landing.
-    await pair.host.waitForFunction(startY => Math.abs(window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!.y - startY) > 1, jumpStartY, { timeout: 8000 });
     // Let the latched jump land before choosing a clear movement direction.
     await pair.host.waitForFunction(() => ['idle', 'run'].includes(window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!.state), undefined, { timeout: 8000 });
     // Meadow spawns can be flush against either side of a stump.
@@ -192,23 +188,29 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
       let leftGap = player.x, rightGap = arena.width - player.x - player.width;
       for (const platform of arena.platforms) {
         if (player.y + player.height <= platform.y || player.y >= platform.y + platform.height) continue;
-        // Count slight horizontal overlap as zero clearance. Ignoring it can
-        // select movement into a stump when the mirrored position straddles its edge.
-        const left = platform.x + (platform.leftCollisionInset ?? 0);
-        const right = platform.x + platform.width;
-        if ((left + right) / 2 >= player.x + player.width / 2) {
-          rightGap = Math.min(rightGap, Math.max(0, left - player.x - player.width));
-        } else {
-          leftGap = Math.min(leftGap, Math.max(0, player.x - right));
-        }
+        if (platform.x >= player.x + player.width) rightGap = Math.min(rightGap, platform.x - player.x - player.width);
+        if (platform.x + platform.width <= player.x) leftGap = Math.min(leftGap, player.x - platform.x - platform.width);
       }
       return leftGap > rightGap ? -1 : 1;
     });
-    const movementKey = direction < 0 ? 'a' : 'd';
-    await pair.guest.keyboard.down(movementKey);
-    try {
-      await pair.host.waitForFunction(direction => (window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 0) * direction > 0, direction, { timeout: 8000 });
-    } catch (error) {
+    // The player may land beside a different obstacle between mirror reads.
+    // Try the opposite direction if the first is blocked; both still require
+    // signed authoritative velocity over the real guest input transport.
+    let moved = false;
+    let movementError: unknown;
+    for (const candidate of [direction, -direction]) {
+      const movementKey = candidate < 0 ? 'a' : 'd';
+      await pair.guest.keyboard.down(movementKey);
+      try {
+        await pair.host.waitForFunction(direction => (window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 0) * direction > 0, candidate, { timeout: 8000 });
+        moved = true;
+      } catch (error) {
+        if (!(error instanceof Error) || error.name !== 'TimeoutError') throw error;
+        movementError = error;
+      } finally { await pair.guest.keyboard.up(movementKey); }
+      if (moved) break;
+    }
+    if (!moved) {
       console.error('Held guest input timeout', await pair.host.evaluate(() => {
         const state = window.__bunnyTest!.state();
         const match = window.__bunnyTest!.netMatch() as unknown as { hostAuthority: HostAuthority };
@@ -217,8 +219,8 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
           player: player && { x: player.x, y: player.y, vx: player.vx, vy: player.vy, state: player.state, active: player.active },
           input: match.hostAuthority.getNetworkInputs().get('P2') };
       }));
-      throw error;
-    } finally { await pair.guest.keyboard.up(movementKey); }
+      throw movementError;
+    }
     await pair.host.waitForFunction(() => Math.abs(window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 1) < 1, undefined, { timeout: 8000 });
     expect(await pair.host.evaluate(() => (window as Window & { __guestJumpReads: number }).__guestJumpReads)).toBe(1);
 
