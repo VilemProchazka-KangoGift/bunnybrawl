@@ -18,6 +18,7 @@ import { drawPropStudyBack, drawPropStudyFront, PROP_VARIANTS, type PropVariant 
 import { drawIllustratedPropBack, drawIllustratedPropFront, ILLUSTRATED_PROP_VARIANTS, preloadPropAtlas, type IllustratedPropVariant } from '../winter-props/illustrated';
 import { drawRoundGroveBackground, type IglooVariant } from '../../../src/engine/arenas/packs/winterLakeRoundGroveProps';
 import { ACTION_VARIANTS, drawActionSnow, drawActionSpring, drawActionThorn, drawActionZone, type ActionVariant } from '../../../src/engine/arenas/packs/winterActionArt';
+import { applyAtmosphereVariant, ATMOSPHERE_VARIANTS, type AtmosphereVariant } from '../winter-atmosphere/variants';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
@@ -26,6 +27,7 @@ const platformVariant = query.get('platform');
 const propVariant = query.get('props');
 const iglooVariant = query.get('igloo');
 const actionVariant = query.get('action');
+const atmosphereVariant = query.get('atmosphere');
 if (!VARIANTS.includes(variant as Variant)) throw new Error(`Unknown background: ${variant}`);
 if (time !== 'day' && time !== 'night') throw new Error(`Unknown time: ${time}`);
 if (platformVariant && !PLATFORM_VARIANTS.includes(platformVariant as PlatformVariant)) throw new Error(`Unknown platform: ${platformVariant}`);
@@ -33,6 +35,8 @@ if (propVariant && propVariant !== 'current' && !PROP_VARIANTS.includes(propVari
   && !ILLUSTRATED_PROP_VARIANTS.includes(propVariant as IllustratedPropVariant)) throw new Error(`Unknown props: ${propVariant}`);
 if (iglooVariant && !['blue-brick','snow-stone','arched-door'].includes(iglooVariant)) throw new Error(`Unknown igloo: ${iglooVariant}`);
 if (actionVariant && actionVariant !== 'current' && !ACTION_VARIANTS.includes(actionVariant as ActionVariant)) throw new Error(`Unknown action study: ${actionVariant}`);
+if (atmosphereVariant && atmosphereVariant !== 'current'
+  && !ATMOSPHERE_VARIANTS.includes(atmosphereVariant as AtmosphereVariant)) throw new Error(`Unknown atmosphere: ${atmosphereVariant}`);
 
 let seed = 7312;
 Math.random = () => {
@@ -66,6 +70,22 @@ if (actionVariant && actionVariant !== 'current') {
   theme.drawCustomSpring = (ctx, x, y, size, bounce) => drawActionSpring(ctx, x, y, size, bounce, selection);
   theme.drawCustomHazardZone = (ctx, x, y, width, height) => drawActionZone(ctx, x, y, width, height, selection);
   theme.drawWeatherParticle = (ctx, particle) => drawActionSnow(ctx, particle, selection);
+}
+if (atmosphereVariant) {
+  // Fixed cloud positions make the before and after scenes directly comparable.
+  // Older study URLs without an atmosphere query retain their original scene.
+  theme.clouds = {
+    ...theme.clouds,
+    initialClouds: [
+      { x: 90, y: 105, size: 68, speed: 5 },
+      { x: 393, y: 135, size: 59, speed: 6 },
+      { x: 725, y: 91, size: 74, speed: 4 },
+      { x: 1065, y: 124, size: 63, speed: 5 },
+    ],
+  };
+  if (atmosphereVariant !== 'current') {
+    applyAtmosphereVariant(theme, atmosphereVariant as AtmosphereVariant);
+  }
 }
 if (platformVariant) {
   // The study's `current` background is the approved Pearl plate. Without a
@@ -159,6 +179,15 @@ const state = createEmptyMatchState();
 state.phase = 'playing';
 state.timeElapsed = 18;
 state.dayPhase = time === 'night' ? .5 : 0;
+if (atmosphereVariant && theme.fog) {
+  const fog = theme.fog;
+  state.fogParticles = Array.from({ length: fog.count }, (_, i) => ({
+    x: (i * 211 + 43) % 1280,
+    y: fog.baseY + ((i % 5) - 2) * fog.yVariance * .3,
+    vx: 4 + i % 5,
+    alpha: fog.alphaRange[0] + (i % 4) * (fog.alphaRange[1] - fog.alphaRange[0]) / 3,
+  }));
+}
 state.players = createInitialPlayers(['P1', 'P2', 'P3', 'P4', 'P5'], arena, false, Math.random);
 const byName = new Map(getAllCharacters().map(character => [character.name, character]));
 const placements = [
