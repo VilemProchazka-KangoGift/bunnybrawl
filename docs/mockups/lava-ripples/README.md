@@ -11,3 +11,5 @@ Entry occurs at 0.4 seconds in a scripted two-second loop. Ember cough and smoke
 Validation: Playwright checked exact current-renderer pixels at seven ages, all 19 characters, distinct active options, identical pre-entry/expired scenes, shared and isolated effects, lava edge, left-facing, night, native/2x and mobile layouts, and no browser errors. ESLint passed for the builder and verifier. Production build, Vitest and game E2E were not run for this docs-only comparison.
 
 Additional splash options: Rolling lava lobes (low rounded mass), Forked splash (two outward curls), Pointed lava fan (tall uneven fingers), and Molten droplets (detached drops with small surface lip). All share the existing 0.6-second window.
+
+Combined splash study: Rolling lobes + droplets preserves the selected lobe silhouette with seven full-sized molten drops; Wide rolling wave, Curling wings and Rounded crown explore different splash silhouettes with the same drop count and lifetime. Originals remain above the combined section.
