@@ -74,6 +74,8 @@ async function openOnlineModal(page: Page): Promise<void> {
 }
 
 async function hostCreateRoom(page: Page): Promise<string> {
+  // Velocity/release checks require predictable terrain, not a random slippery arena.
+  await page.evaluate(() => window.__bunnyTest!.gameStore().getState().setMatchSettings({ arenaId: 'meadow' }));
   await openOnlineModal(page);
   await page.getByTestId('online-name-input').fill('Host');
   await page.getByTestId('online-create-btn').click();
@@ -95,7 +97,8 @@ async function guestJoin(page: Page, code: string): Promise<void> {
 async function waitForLobby(page: Page): Promise<void> {
   const startBtn = page.getByTestId('online-start-btn');
   const readyBtn = page.getByTestId('online-ready-btn');
-  await expect(startBtn.or(readyBtn)).toBeVisible({ timeout: 15000 });
+  // The UI enters its slow-connection stage at 15s; give WebRTC time to finish.
+  await expect(startBtn.or(readyBtn)).toBeVisible({ timeout: 30000 });
 }
 
 async function isRemoteSim(page: Page): Promise<boolean> {
