@@ -25,14 +25,14 @@ function drawTrailScene(ctx,atlas,name,time,index,surface,width,speed,left,invin
       const [h,s,l]=hsl(invincible?'#88BBFF':characterColors[name]);
       trail.forEach((image,i)=>{
         const shift=(i/Math.max(1,trail.length-1)-1)*18,age=elapsed-image.time;
-        let alpha=image.alpha,rx=32*.38,ry=32*.38;
+        let alpha=image.alpha,rx=32*.38,ry=32*.38,drop=0;
         if(!invincible){
           if(index===1)alpha*=.9;
           if(index===3){rx=17.6;ry=8.3;alpha*=.85;}
-          if(index===4){const taper=.35+.65*image.alpha;rx*=taper;ry*=taper;alpha*=.9;}
+          if(index===4||index===5){const taper=.35+.65*image.alpha;rx*=taper;ry*=taper;alpha*=.9;if(index===5)drop=10*(1-image.alpha);}
         }
         ctx.fillStyle=`hsl(${Math.round((h+shift+360)%360)},${s}%,${l}%)`;
-        ctx.globalAlpha=alpha;ctx.beginPath();ctx.ellipse(-speed*age,-32+32*.55,rx,ry,0,0,Math.PI*2);ctx.fill();
+        ctx.globalAlpha=alpha;ctx.beginPath();ctx.ellipse(-speed*age,-32+32*.55+drop,rx,ry,0,0,Math.PI*2);ctx.fill();
       });
     }
     // Identical selected heel puff shape, cadence, velocity and gravity in all panels.
