@@ -10,7 +10,7 @@ const browser = await chromium.launch({
     ? { executablePath: process.env.WINTER_ATMOSPHERE_CHROMIUM } : {}),
 });
 try {
-  for (const atmosphere of ['current', 'clear-ice', 'silver-drift', 'polar-veil']) {
+  for (const atmosphere of ['current', 'amber-frost', 'glacier-teal', 'violet-dusk']) {
     for (const time of ['day', 'night']) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
       const errors = [];
