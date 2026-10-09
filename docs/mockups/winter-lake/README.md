@@ -2,19 +2,19 @@
 
 This is the audit before changing the arena artwork. The game calls this arena **Winter Lake** (`winter_lake`); the redesign brief also calls it Frozen Lake. The [generic arena redesign sequence](../../../.claude/skills/visual-style/SKILL.md#arena-redesign-sequence) governs the following passes.
 
-The cross-pass [Winter Lake lessons and current selections](LESSONS.md) explain how the background, platforms, props, cover, and layout evolved. The comparisons below retain their original assessments, including options that were later superseded.
+The cross-pass [Winter Lake lessons and current selections](LESSONS.md) explain how the background, platforms, props, cover, action objects, and atmosphere evolved. The comparisons below retain their original assessments, including options that were later superseded. The [selected Glacier Teal production captures](../winter-atmosphere/README.md#selected-production-result) are the latest day/night reference; the images in this audit are a pre-redesign baseline.
 
-## Current production scene
+## Pre-redesign production baseline
 
 | Noon | Midnight |
 | --- | --- |
 | ![Current Winter Lake at noon](live-current-day.png) | ![Current Winter Lake at midnight](live-current-night.png) |
 
-These are 1280 × 720 captures from the live Vite match renderer at the same camera and fixed positions. Bunny, Frog, Fox, Wolf, and Panda sample pale, green, warm, dark, and black-and-white character palettes. The HUD is hidden because its preselected bot names do not follow this capture's temporary character substitutions. Spawned carrots, springs, and thorns are cleared for a stable art comparison; their arena-specific artwork remains in scope for a later pass. The game loop is paused after placement, so noon and night compare the same poses and positions. Weather and aurora still animate in the renderer.
+These historical 1280 × 720 captures came from the live Vite match renderer at the same camera and fixed positions. Bunny, Frog, Fox, Wolf, and Panda sample pale, green, warm, dark, and black-and-white character palettes. The HUD is hidden because its preselected bot names do not follow this capture's temporary character substitutions. Spawned carrots, springs, and thorns were cleared for a stable art comparison; their later Ink Bell treatment is recorded in the [action study](../winter-actionable/README.md). The game loop was paused after placement, so noon and night compare the same poses and positions. Weather and aurora still animated in the renderer.
 
 Reproduce with `npx vite --host 127.0.0.1 --port 4222` from the repo root, then `node docs/mockups/winter-lake/capture-baseline.mjs`. The script uses `?arena=winter_lake&bots=4&simWorker=off` so the browser test hook can pin the local simulation state. The images are a design baseline, not a worker-mode regression result.
 
-## What the current design communicates
+## What the original design communicated
 
 - The snow caps, blue platform bodies, hanging icicles, and translucent ice cubes give a recognizable winter material language. Platform tops and solid obstacles remain visible.
 - The repeated decorated trees and tiny snowmen read as a Christmas scene. They compete for attention with characters, pickups, and the small landing platforms. At 1280 × 720, the same two motifs repeat on most platforms.

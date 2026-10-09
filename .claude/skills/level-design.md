@@ -195,7 +195,7 @@ Every arena must have 2-3 solid themed obstacles on the ground that players can 
 | Arena | Obstacle | Primitive | Typical size |
 |-------|----------|-----------|-------------|
 | Meadow | Tree stump | `drawTreeStump` | 55w x 45h |
-| Winter Lake | Ice cube | `drawIceCube` | 60-65w x 50h |
+| Winter Lake | Ice cube | `iceCube` platform style in `winterLakeVectorPlatforms.ts` | 65w x 50h collision box; the drawn front face projects 9px below the ground without moving its landing top |
 | (New arenas) | Must add one | Theme-appropriate | 50-70w x 40-55h |
 
 To create a solid obstacle:
