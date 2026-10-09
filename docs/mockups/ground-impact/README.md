@@ -25,3 +25,5 @@ Added Wide forked spread, Fine branching web and Heavy split with forks, making 
 ## Selected implementation
 
 Fine branching web selected and implemented in rendering/surfaceImpact.ts. Eight fixed branching paths, 1.6px dark ink and a 0.45px material-colored inner line; mini marks use 0.7x scale, full marks 1x. Existing trigger thresholds, lifetimes, event transport, platform clipping and impact bursts are unchanged. The frozen original comparison remains intact; verify.mjs now compares the selected variant to production. TypeScript and 80 focused renderer/surface-impact Vitest tests passed; selected drawing pixel equality and gallery browser checks passed.
+
+Final local validation: changed-file ESLint, Vite production build, nine production Playwright smoke tests (including arena switching in both worker modes) passed. Live captures passed without browser errors: default mode uses natural bot impacts; simWorker=off seeds an airborne player above a clear platform and lets real physics trigger the impact, asserting the resulting decal. The worker test mirror omits local-only decals, so do not wait for surfaceDecals in its state. Full suites run in CI.
