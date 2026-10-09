@@ -1,4 +1,4 @@
-import type { Ctx2D, WeatherParticle } from '../../../src/engine/types';
+import type { Ctx2D, WeatherParticle } from '../../types';
 
 export const ACTION_VARIANTS = ['ink-bell', 'crystal-bloom', 'carved-puck'] as const;
 export type ActionVariant = typeof ACTION_VARIANTS[number];

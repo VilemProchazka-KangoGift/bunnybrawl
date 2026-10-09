@@ -9,7 +9,9 @@ const browser = await chromium.launch({
   ...(process.env.WINTER_ACTION_CHROMIUM ? { executablePath: process.env.WINTER_ACTION_CHROMIUM } : {}),
 });
 try {
-  for (const action of ['current', 'ink-bell', 'crystal-bloom', 'carved-puck']) {
+  // `current` images are an archived pre-integration baseline. The game pack
+  // now uses Ink Bell, so capturing `current` would overwrite that comparison.
+  for (const action of ['ink-bell', 'crystal-bloom', 'carved-puck']) {
     for (const time of ['day', 'night']) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
       const errors = [];

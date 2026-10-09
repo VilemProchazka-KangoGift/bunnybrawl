@@ -17,7 +17,7 @@ import { drawTracedSvgBack, drawTracedSvgFront, preloadTracedBridge } from '../w
 import { drawPropStudyBack, drawPropStudyFront, PROP_VARIANTS, type PropVariant } from '../winter-props/variants';
 import { drawIllustratedPropBack, drawIllustratedPropFront, ILLUSTRATED_PROP_VARIANTS, preloadPropAtlas, type IllustratedPropVariant } from '../winter-props/illustrated';
 import { drawRoundGroveBackground, type IglooVariant } from '../../../src/engine/arenas/packs/winterLakeRoundGroveProps';
-import { ACTION_VARIANTS, drawActionSnow, drawActionSpring, drawActionThorn, drawActionZone, type ActionVariant } from '../winter-actionable/variants';
+import { ACTION_VARIANTS, drawActionSnow, drawActionSpring, drawActionThorn, drawActionZone, type ActionVariant } from '../../../src/engine/arenas/packs/winterActionArt';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';

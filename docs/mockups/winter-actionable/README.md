@@ -1,6 +1,6 @@
 # Winter Lake: actionable objects and snow study
 
-This is the first comparison for phase 5 of the [arena redesign sequence](../../../.claude/skills/visual-style/SKILL.md#arena-redesign-sequence). It studies the **existing** hanging danger zones, spawned thorns, spring, carrot, and snowfall over the merged Pearl/Canvas/prop scene. The game pack has not changed. The [production renderer fixture](../winter-lake/render.ts) places identical objects at fixed positions for every candidate; these are review placements, not new spawn rules. The candidate drawings replace only the fixture's thorn, spring, zone, and snow callbacks.
+This comparison for phase 5 of the [arena redesign sequence](../../../.claude/skills/visual-style/SKILL.md#arena-redesign-sequence) studied the hanging danger zones, spawned thorns, spring, carrot, and snowfall over the merged Pearl/Canvas/prop scene. **Ink Bell is now implemented in the Winter Lake game pack.** The [production renderer fixture](../winter-lake/render.ts) places identical objects at fixed positions for every candidate; these are review placements, not new spawn rules. The original Current images remain an archived pre-integration baseline.
 
 ## Full-scene comparisons
 
@@ -30,10 +30,20 @@ These native-pixel crops show the underside hazards, side-platform thorns, and t
 - The selected long-root carrot already provides the warm collectible accent. The comparison fixes it in the same place, including its night glow; no carrot redraw is proposed here.
 - Snow density should stay behind actionable edges. These stills vary round flakes, diagonal streaks, and sparse small flakes. Motion, spawn rate, weather cost, fog, aurora, and glints still need a separate live pass before selecting atmosphere.
 
-**Working recommendation:** carry Ink Bell into a playable prototype first. Its bell distinguishes the spring from snow, and the dark ice edge keeps hazards legible at night. Check the icicle rhythm and actual collision bounds in motion. Crystal Bloom and Carved Puck are useful alternatives if the warmer mushroom feels out of place, but their night visibility needs improvement before adoption.
+**Selected direction:** Ink Bell. Its bell distinguishes the spring from snow, and the dark ice edge keeps hazards legible at night. The thorn, icicle, spring, and snowfall functions now come from [the arena art module](../../../src/engine/arenas/packs/winterActionArt.ts). Crystal Bloom and Carved Puck remain comparison alternatives.
+
+## Playable arena check
+
+The selected art is wired into the Winter Lake pack without changing hazard zones, thorn or spring spawn rules, platform positions, or collision bounds. These live captures use the actual match renderer with four bots, once with the default simulation worker and once with `simWorker=off`. Spawned thorns and springs appear on timers, so the opening stills chiefly verify the permanent ceiling icicles, snow, and complete scene composition. The final capture waits until both timed objects have spawned; the fixed object-size crops above show their art more clearly.
+
+| Default worker | Simulation worker off |
+| --- | --- |
+| ![Live Ink Bell default](live-ink-bell-default.png) | ![Live Ink Bell with simulation worker off](live-ink-bell-sim-worker-off.png) |
+
+![Live Ink Bell after the spring and thorn spawn](live-ink-bell-objects.png)
 
 ## Reproduce
 
-Start Vite from this branch and set `WINTER_ACTION_URL` to its `/bunnybrawl/` URL. Run `node docs/mockups/winter-actionable/capture.mjs` to refresh all eight 1280 × 720 scenes and the matching object crops. The fixture URL is `docs/mockups/winter-lake/render.html?variant=current&props=current&action=current|ink-bell|crystal-bloom|carved-puck&time=day|night`. Captures use a fixed random seed, five fixed character poses, fixed object positions, and 28 snow particles. They are static production-renderer composites, not a gameplay or performance test.
+Start Vite from this branch and set `WINTER_ACTION_URL` to its `/bunnybrawl/` URL. Run `node docs/mockups/winter-actionable/capture.mjs` to refresh the six candidate scenes and matching object crops. The archived `current-*.png` baseline is retained and deliberately excluded from recapture now that production uses Ink Bell. The fixture URL is `docs/mockups/winter-lake/render.html?variant=current&props=current&action=ink-bell|crystal-bloom|carved-puck&time=day|night`. Captures use a fixed random seed, five fixed character poses, fixed object positions, and 28 snow particles. They are static production-renderer composites, not a gameplay or performance test.
 
 If Playwright's expected browser version is unavailable but a compatible local Chromium is installed, set `WINTER_ACTION_CHROMIUM` to its executable path for the capture script.
