@@ -245,3 +245,7 @@ Selected Fine branching web replaces ground crack spokes with eight thin branchi
 ### Lava-entry ripple comparisons
 
 Keep lava ripples separate from Ember cough: the surface ripple lasts 0.6 seconds and the cough particle 0.59 seconds. Freeze both production drawings in the comparison gallery and provide a shared-burn toggle. Verify the current baseline pixel-for-pixel, including its combined stroke/context alpha fade. Edge examples must not invent hazard clipping that production does not perform. Scripted gallery motion is not gameplay validation.
+
+### Wide lava-entry wave
+
+Selected Wide rolling wave + droplets uses a low rounded wave and seven highlighted molten drops in surfaceImpact.ts. Keep the existing ripple packet and 0.6-second lifetime; branch only on lava so water keeps its original rings. Preserve the gallery baseline and compare selected production pixels at several ages. Verify natural Volcano entries in both worker modes.

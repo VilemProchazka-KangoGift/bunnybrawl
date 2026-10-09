@@ -17,6 +17,6 @@ function draw(){ $('time').value=time;$('clock').textContent=time.toFixed(2);can
  drawLavaSurface(ctx,w/z,$('edge').value==='1');drawScene(ctx,images[$('character').value],$('character').value,time,index,$('shared').checked,$('left').checked);
  ctx.restore();canvas.setAttribute('aria-label',$('character').value+' lava entry: '+canvas.parentElement.querySelector('h3').textContent);});}
 $('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause':'Play'};$('replay').onclick=()=>{time=0;playing=true;$('play').textContent='Pause';draw()};$('time').oninput=()=>{time=Number($('time').value);playing=false;$('play').textContent='Play';draw()};for(const id of ['character','edge','shared','left','night','scale','speed'])$(id).onchange=draw;for(const i of Object.values(images))i.onload=draw;new ResizeObserver(draw).observe(document.body);
-window.__lavaStudy={baseline:(ctx,age)=>drawRipples(ctx,{ripples:[{x:0,y:0,age,surface:'lava'}]}),ready:()=>Object.values(images).every(i=>i.complete&&i.naturalWidth)};
+window.__lavaStudy={water:(ctx,age)=>drawRipples(ctx,{ripples:[{x:0,y:0,age,surface:"water"}]}),selected:(ctx,age)=>drawSplashVariant(ctx,age,5),baseline:(ctx,age)=>drawRipples(ctx,{ripples:[{x:0,y:0,age,surface:'lava'}]}),ready:()=>Object.values(images).every(i=>i.complete&&i.naturalWidth)};
 function frame(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number($('speed').value))%2;last=now;draw();requestAnimationFrame(frame)}draw();requestAnimationFrame(frame);
 })();</script></body></html>

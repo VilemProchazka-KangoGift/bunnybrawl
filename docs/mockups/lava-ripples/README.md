@@ -13,3 +13,5 @@ Validation: Playwright checked exact current-renderer pixels at seven ages, all 
 Additional splash options: Rolling lava lobes (low rounded mass), Forked splash (two outward curls), Pointed lava fan (tall uneven fingers), and Molten droplets (detached drops with small surface lip). All share the existing 0.6-second window.
 
 Combined splash study: Rolling lobes + droplets preserves the selected lobe silhouette with seven full-sized molten drops; Wide rolling wave, Curling wings and Rounded crown explore different splash silhouettes with the same drop count and lifetime. Originals remain above the combined section.
+
+Selected for production: Wide rolling wave + droplets. Lava now uses the chosen drawing; water rings, emission conditions, lifetime, slow-device suppression and shared Ember cough remain unchanged. The gallery keeps the original frozen Current and checks selected-production pixel equality.
