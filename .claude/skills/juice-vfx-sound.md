@@ -241,3 +241,7 @@ Ground marks are independent of landing clouds and fast-stomp crowns. In docs/mo
 ### Fine branching ground cracks
 
 Selected Fine branching web replaces ground crack spokes with eight thin branching paths, dark ink plus a surface-colored inner stroke. Author points once at module scope; full marks use 1x, mini marks 0.7x. Clip in world coordinates before translating/scaling the mark. Preserve emitter thresholds, five/three/two-second lifetimes, crown and landing puffs, and existing transported decal data. The gallery keeps the frozen original renderer; its verification now compares the selected fine-web drawing pixel-for-pixel to production.
+
+### Lava-entry ripple comparisons
+
+Keep lava ripples separate from Ember cough: the surface ripple lasts 0.6 seconds and the cough particle 0.59 seconds. Freeze both production drawings in the comparison gallery and provide a shared-burn toggle. Verify the current baseline pixel-for-pixel, including its combined stroke/context alpha fade. Edge examples must not invent hazard clipping that production does not perform. Scripted gallery motion is not gameplay validation.
