@@ -179,9 +179,13 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
     });
     await pair.host.waitForFunction(() => (window as Window & { __guestJumpReads?: number }).__guestJumpReads === 1, undefined, { timeout: 8000 });
     // Exercise held movement and release over real WebRTC, not just an idle soak.
-    await pair.guest.keyboard.down('d');
+    // Meadow's right spawn can be flush against the stump at x=860.
+    // Move inward so this checks delivered input rather than obstacle clearance.
+    const direction = await pair.host.evaluate(() => (window.__bunnyTest!.state()!.players.find(p => p.id === 'P2')!.x > 640 ? -1 : 1));
+    const movementKey = direction < 0 ? 'a' : 'd';
+    await pair.guest.keyboard.down(movementKey);
     try {
-      await pair.host.waitForFunction(() => (window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 0) > 0, undefined, { timeout: 8000 });
+      await pair.host.waitForFunction(direction => (window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 0) * direction > 0, direction, { timeout: 8000 });
     } catch (error) {
       console.error('Held guest input timeout', await pair.host.evaluate(() => {
         const state = window.__bunnyTest!.state();
@@ -192,7 +196,7 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
           input: match.hostAuthority.getNetworkInputs().get('P2') };
       }));
       throw error;
-    } finally { await pair.guest.keyboard.up('d'); }
+    } finally { await pair.guest.keyboard.up(movementKey); }
     await pair.host.waitForFunction(() => Math.abs(window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 1) < 1, undefined, { timeout: 8000 });
     expect(await pair.host.evaluate(() => (window as Window & { __guestJumpReads: number }).__guestJumpReads)).toBe(1);
 
