@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+const source = new URL('../running-dust/', import.meta.url);
+const target = new URL('.', import.meta.url);
+const read = name => fs.readFileSync(new URL(name, source), 'utf8').replace(/\r\n/g, '\n');
+let template = read('template.html').replaceAll('running-', 'trail-').replaceAll('running-choice', 'trail-choice').replaceAll('Running dust', 'Running speed trails').replaceAll('Tiny heel puffs', 'Faint pose echoes').replaceAll('Surface flecks', 'Short motion ticks').replaceAll('drawRunningScene', 'drawTrailScene');
+template = template.replace('<div class="viz-controls">', '<p>Compare speed trails with Tiny heel puffs in every panel. Invincibility keeps its original blue trail in every option.</p>\n  <div class="viz-controls">');
+template = template.replace('<label class="form-label">Surface', '<label class="form-label">Run speed <select id="trail-velocity"><option value="280">280 px/s · full speed</option><option value="200">200 px/s · threshold</option><option value="160">160 px/s · slow run</option></select></label>\n    <label class="form-check"><input id="trail-left" type="checkbox">Left</label>\n    <label class="form-check"><input id="trail-protected" type="checkbox">Invincible (unchanged)</label>\n    <label class="form-label">Surface');
+template = template.replace('  const surface=', "  const velocity=root.querySelector('#trail-velocity'),left=root.querySelector('#trail-left'),protectedRun=root.querySelector('#trail-protected');\n  const surface=");
+template = template.replace('[surface,character,speed,scale,night,', '[velocity,left,protectedRun,surface,character,speed,scale,night,');
+template = template.replace('ctx.translate(w/2,h-20);ctx.scale(z,z);','ctx.translate(w/2,h-20);ctx.scale(z,z);');
+template = template.replace('surface.value,w/z);', 'surface.value,w/z,Number(velocity.value),left.checked,protectedRun.checked);');
+fs.writeFileSync(new URL('template.html',target),template);
+let builder = read('build-study.mjs').replaceAll('Running dust comparisons','Running speed trail comparisons').replaceAll('four running-dust','four running-afterimage');
+builder = builder.replace("const fragment=", "const colors=Object.fromEntries(names.map(name=>[name,fs.readFileSync(new URL('../../../src/engine/characters/packs/'+name.toLowerCase()+'.ts',import.meta.url),'utf8').match(/color: '(#[A-Fa-f0-9]+)'/)[1]]));\nconst fragment=");
+builder = builder.replace(".replace('__CHARACTERS__',JSON.stringify(characters))", ".replace('__CHARACTERS__',JSON.stringify(characters)).replace('__COLORS__',JSON.stringify(colors))");
+builder = builder.replace(".replace('/*__VARIANTS__*/',read('./variants.js'))", ".replace('/*__VARIANTS__*/',read('./variants.js').replace('__COLORS__',JSON.stringify(colors)).replace('/*__BASELINE__*/',read('./baseline.mjs').replace('export function','function')))");
+fs.writeFileSync(new URL('build-study.mjs',target),builder);

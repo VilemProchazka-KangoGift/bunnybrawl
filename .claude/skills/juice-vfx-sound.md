@@ -215,3 +215,7 @@ Selected Ember cough emits one stationary burnCough particle on a rising/refresh
 ### Tiny running heel puffs
 
 Running uses one small cream heelCloud every 200ms, 300ms lifetime, 2.8px size scaled with body width, anchored behind the feet and drifting at 9px/s. Keep visual cadence in a separate per-player Accumulator so surface-aware footstep audio retains its tempo and volume. Clear on non-running/inactive players and cleanup; suppress on slow devices. The custom tiny cloud has a half-pixel ink edge and uses SAB shape 11, leaving code 10 available for the kill-ring work. Unlike landingCloud, heelCloud retains normal particle gravity to match the selected study. Generic ground-run speed afterimages remain a separate effect and can obscure these tiny puffs in live review.
+
+### Running speed trail comparisons
+
+The [speed trail study](../../docs/mockups/running-afterimages/README.md) keeps Tiny heel puffs identical while comparing ordinary grounded speed trails. Freeze both emitter and renderer behavior: 30 Hz cosmetics, residual 30 ms accumulator, five-entry cap, swap-remove expiry, 4/s alpha decay, hue-shifted body ovals. Check the strict >200 px/s threshold and preserve the blue invincibility trail in every candidate, including None. Distinguish speed decoration from protection status before changing shared afterimage code.

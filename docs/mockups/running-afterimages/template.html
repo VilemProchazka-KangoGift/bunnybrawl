@@ -1,0 +1,72 @@
+<div id="trail-study">
+  <h2>Running speed trails</h2>
+  <p>Compare speed trails with Tiny heel puffs in every panel. Invincibility keeps its original blue trail in every option.</p>
+  <div class="viz-controls">
+    <label class="form-label">Character <select class="form-select" id="trail-character"></select></label>
+    <label class="form-label">Run speed <select id="trail-velocity"><option value="280">280 px/s · full speed</option><option value="200">200 px/s · threshold</option><option value="160">160 px/s · slow run</option></select></label>
+    <label class="form-check"><input id="trail-left" type="checkbox">Left</label>
+    <label class="form-check"><input id="trail-protected" type="checkbox">Invincible (unchanged)</label>
+    <label class="form-label">Surface <select class="form-select" id="trail-surface"><option>grass</option><option>stone</option><option>wood</option><option>snow</option><option>sand</option><option>ice</option><option>metal</option><option>glass</option></select></label>
+    <button class="btn" type="button" id="trail-play">Pause</button>
+    <label class="form-label">Speed <select class="form-select" id="trail-speed"><option value="1">Normal</option><option value="0.35">Slow motion</option></select></label>
+    <label class="form-label">Scale <select class="form-select" id="trail-scale"><option value="1">Game size</option><option value="2">2× detail</option></select></label>
+    <label class="form-check"><input class="form-check-input" id="trail-night" type="checkbox"><span class="form-check-label">Night</span></label>
+  </div>
+  <label class="form-label" for="trail-time">Running timing</label>
+  <input class="form-range" id="trail-time" type="range" min="0" max="4.2" step="0.005" value="0">
+  <div class="trail-panels">
+    <section><h3>Current</h3><canvas aria-label="Running speed trails comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="trail-choice" value="Current"><span class="form-check-label">Current</span></label></section>
+    <section><h3>Faint pose echoes</h3><canvas aria-label="Running speed trails comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="trail-choice" value="Faint pose echoes"><span class="form-check-label">Faint pose echoes</span></label></section>
+    <section><h3>Short motion ticks</h3><canvas aria-label="Running speed trails comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="trail-choice" value="Short motion ticks"><span class="form-check-label">Short motion ticks</span></label></section>
+    <section><h3>None</h3><canvas aria-label="Running speed trails comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="trail-choice" value="None"><span class="form-check-label">None</span></label></section>
+  </div>
+</div>
+<style>
+  #trail-study .trail-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  #trail-study canvas{display:block;width:100%;height:220px}
+  @media(max-width:560px){#trail-study .trail-panels{grid-template-columns:1fr}}
+</style>
+<script>
+(() => {
+  const root=document.getElementById('trail-study');
+  const characterSources=__CHARACTERS__;
+  const characterImages=Object.fromEntries(Object.entries(characterSources).map(([name,src])=>{const image=new Image();image.src=src;return [name,image]}));
+  const backdrop=new Image();backdrop.src='__BACKDROP__';
+  /*__VARIANTS__*/
+  const play=root.querySelector('#trail-play'),speed=root.querySelector('#trail-speed'),scale=root.querySelector('#trail-scale'),night=root.querySelector('#trail-night'),scrub=root.querySelector('#trail-time');
+  const velocity=root.querySelector('#trail-velocity'),left=root.querySelector('#trail-left'),protectedRun=root.querySelector('#trail-protected');
+  const surface=root.querySelector('#trail-surface');
+  const canvases=[...root.querySelectorAll('canvas')];
+  const character=root.querySelector('#trail-character');
+  for(const name of Object.keys(characterSources)){const option=document.createElement('option');option.value=name;option.textContent=name;character.append(option)}
+  let time=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,last=0;
+  function save(){const choice=root.querySelector('input[name="trail-choice"]:checked')?.value;window.openai?.setWidgetState?.({modelContent:{running:choice||null,character:character.value},privateContent:{character:character.value,time,playing,speed:speed.value,scale:scale.value,surface:surface.value,night:night.checked}})?.catch(()=>{});}
+  function restore(state){if(!state)return;const p=state.privateContent||{};if(characterImages[p.character])character.value=p.character;if(Number.isFinite(p.time))time=p.time;if(typeof p.playing==='boolean')playing=p.playing;for(const [name,el] of [['speed',speed],['scale',scale]])if(p[name])el.value=p[name];night.checked=!!p.night;if(p.surface)surface.value=p.surface;for(const radio of root.querySelectorAll('input[name="trail-choice"]'))radio.checked=radio.value===state.modelContent?.running;play.textContent=playing?'Pause':'Play';}
+  restore(window.openai?.widgetState);play.textContent=playing?'Pause':'Play';
+  window.addEventListener('openai:set_globals',e=>restore(e.detail?.globals?.widgetState));
+  play.onclick=()=>{playing=!playing;play.textContent=playing?'Pause':'Play';save()};
+  scrub.oninput=()=>{time=Number(scrub.value);playing=false;play.textContent='Play';draw();save()};
+  for(const el of [velocity,left,protectedRun,surface,character,speed,scale,night,...root.querySelectorAll('input[name="trail-choice"]')])el.onchange=()=>{draw();save()};
+  function draw(){
+    scrub.value=String(time);
+    canvases.forEach((canvas,index)=>{
+      const z=Number(scale.value),h=z===2?340:220;canvas.style.height=h+'px';
+      const w=canvas.clientWidth,dpr=Math.min(devicePixelRatio||1,2);
+      if(canvas.width!==Math.round(w*dpr)||canvas.height!==h*dpr){canvas.width=Math.round(w*dpr);canvas.height=h*dpr;}
+      const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+      ctx.fillStyle=night.checked?'#334451':'#ACD5DE';ctx.fillRect(0,0,w,h);
+      if(backdrop.naturalWidth){ctx.globalAlpha=night.checked?.22:.6;ctx.drawImage(backdrop,230,240,480,300,0,0,w,h);ctx.globalAlpha=1;}
+      ctx.save();ctx.translate(w/2,h-20);ctx.scale(z,z);
+      ctx.fillStyle=surfaceGround[surface.value];ctx.fillRect(-w/z,0,w*2/z,24);
+      ctx.strokeStyle='#665344';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-w/z,0);ctx.lineTo(w/z,0);ctx.stroke();
+      canvas.dataset.hit=String(time>=.4);
+      canvas.setAttribute('aria-label',character.value+' running: '+canvas.parentElement.querySelector('h3').textContent+(time>=.1?', running':', ready'));
+      drawTrailScene(ctx,characterImages[character.value],character.value,time,index,surface.value,w/z,Number(velocity.value),left.checked,protectedRun.checked);
+      ctx.restore();
+    });
+  }
+  new ResizeObserver(draw).observe(root);for(const image of Object.values(characterImages))image.onload=draw;backdrop.onload=draw;
+  function frame(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number(speed.value))%4.2;last=now;draw();requestAnimationFrame(frame)}
+  draw();requestAnimationFrame(frame);
+})();
+</script>

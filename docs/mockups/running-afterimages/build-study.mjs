@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+const read=p=>fs.readFileSync(new URL(p,import.meta.url),'utf8');
+const old=read('../movement-vfx/index.html');
+const backdrop=old.match(/backdrop.src='([^']+)'/)[1];
+const names=['Bunny','Fox','Frog','Bear','Owl','Cat','Wolf','Panda','Pig','Cow','Goat','Horse','Sheep','Monkey','Tiger','Rhino','Hedgehog','Chick','Axolotl'];
+const characters=Object.fromEntries(names.map(name=>[name,'data:image/webp;base64,'+fs.readFileSync(new URL('../../../src/engine/characters/plush/assets/'+name.toLowerCase()+'.webp',import.meta.url)).toString('base64')]));
+const colors=Object.fromEntries(names.map(name=>[name,fs.readFileSync(new URL('../../../src/engine/characters/packs/'+name.toLowerCase()+'.ts',import.meta.url),'utf8').match(/color: '(#[A-Fa-f0-9]+)'/)[1]]));
+const fragment=read('./template.html').replace('__CHARACTERS__',JSON.stringify(characters)).replace('__COLORS__',JSON.stringify(colors)).replace('__BACKDROP__',backdrop).replace('/*__VARIANTS__*/',read('./variants.js').replace('__COLORS__',JSON.stringify(colors)).replace('/*__BASELINE__*/',read('./baseline.mjs').replace('export function','function')));
+if(fragment.length>1e6||fragment.includes('__VARIANTS__'))throw Error('Invalid study');
+if(process.argv[2])fs.writeFileSync(process.argv[2],fragment);
+fs.writeFileSync(new URL('./index.html',import.meta.url),'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Running speed trail comparisons</title><style>body{font:14px system-ui;margin:20px auto;padding:0 16px;max-width:1000px;background:#faf8f3;color:#332b25}.viz-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.form-label,.form-check{display:inline-flex;gap:6px;align-items:center}button,select{font:inherit;padding:8px}input[type=range]{width:100%}h2{font-size:21px}h3{font-size:15px}</style></head><body>'+fragment+'</body></html>');
+console.log('Built four running-afterimage studies.');
