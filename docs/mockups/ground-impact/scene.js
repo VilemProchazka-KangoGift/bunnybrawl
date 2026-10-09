@@ -3,7 +3,7 @@ function drawMark(ctx,index,d){
  if(index===0){drawSurfaceDecals(ctx,{surfaceDecals:[d]});return;}
  if(index===3)return;
  const life=index===2?.55:d.life;if(d.age>=life)return;
- ctx.save();const radius=d.kind==='full'?28:18;if(!applyDecalClip(ctx,d,radius,radius)){ctx.restore();return;}
+ ctx.save();const radius=d.kind==='full'?32:21;if(!applyDecalClip(ctx,d,radius,radius)){ctx.restore();return;}
  const fade=index===2?Math.pow(1-d.age/life,.8):1-d.age/life;ctx.globalAlpha=fade;ctx.lineJoin='round';ctx.lineCap='round';
  if(index===1){
   const scale=d.kind==='full'?1:.62;ctx.scale(scale,scale);ctx.strokeStyle='#574C42';ctx.lineWidth=2.4;
@@ -11,6 +11,20 @@ function drawMark(ctx,index,d){
   ctx.beginPath();for(const a of arms){ctx.moveTo(a[4],a[5]);ctx.lineTo(a[2],a[3]);ctx.lineTo(a[0],a[1]);}ctx.stroke();
   ctx.strokeStyle=d.color;ctx.lineWidth=.85;ctx.stroke();
   ctx.fillStyle='#574C42';for(const [x,y] of [[-11,5],[15,-4],[-3,-3]]){ctx.beginPath();ctx.moveTo(x-2,y);ctx.lineTo(x+1,y-1);ctx.lineTo(x+3,y+1);ctx.lineTo(x,y+2);ctx.closePath();ctx.fill();}
+ }else if(index>=4){
+  const scale=d.kind==='full'?1:.7;ctx.scale(scale,scale);ctx.fillStyle='#574C42';ctx.strokeStyle=d.color;ctx.lineWidth=.75;
+  if(index===4){ // Wide split: two thick zigzags rather than a radial star.
+   for(const side of [-1,1]){ctx.save();ctx.scale(side,1);ctx.beginPath();ctx.moveTo(0,-1);ctx.lineTo(8,-3);ctx.lineTo(13,-1);ctx.lineTo(21,-4);ctx.lineTo(30,-2);ctx.lineTo(21,-1);ctx.lineTo(14,2);ctx.lineTo(8,0);ctx.lineTo(0,2);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
+   ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(-12,6);ctx.lineTo(-17,7);ctx.lineTo(-11,3);ctx.closePath();ctx.fill();
+  }else if(index===5){ // Three broad tapered fissures with jagged edges.
+   for(const [side,y] of [[-1,-1],[1,-3],[1,6]]){ctx.save();ctx.scale(side,1);ctx.beginPath();ctx.moveTo(-2,0);ctx.lineTo(7,y-2);ctx.lineTo(12,y);ctx.lineTo(19,y-2);ctx.lineTo(27,y);ctx.lineTo(17,y+1);ctx.lineTo(11,y+4);ctx.lineTo(6,y+2);ctx.lineTo(0,3);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
+  }else if(index===6){ // Connected broken plates surrounding the contact.
+   for(const points of [[[-22,-1],[-11,-5],[-3,-3],[-6,1],[-16,3]],[[0,-3],[10,-6],[24,-2],[16,2],[5,1]],[[-15,5],[-4,2],[2,4],[0,8],[-10,9]],[[5,4],[17,3],[25,6],[15,9],[7,7]]]){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();ctx.stroke();}
+  }else{ // Sparse forked cracks with broad ink at their roots.
+   const paths=[[[0,1],[-8,-2],[-15,-1],[-27,-4]],[[0,1],[8,3],[16,0],[28,2]],[[0,1],[-3,5],[-12,9]],[[8,3],[13,7],[23,8]]];
+   for(const points of paths){ctx.strokeStyle='#574C42';ctx.lineWidth=2.7;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();ctx.strokeStyle=d.color;ctx.lineWidth=.7;ctx.stroke();}
+   ctx.fillStyle='#574C42';ctx.beginPath();ctx.moveTo(-5,0);ctx.lineTo(0,-2);ctx.lineTo(7,1);ctx.lineTo(0,4);ctx.closePath();ctx.fill();
+  }
  }else{
   const pulse=Math.min(1,d.age/.045),r=12+3*pulse;ctx.fillStyle='rgba(65,50,36,.28)';ctx.beginPath();ctx.ellipse(0,1,r,3.4,0,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle='#675544';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(-r,-1);ctx.bezierCurveTo(-8,4,-2,4,0,3);ctx.bezierCurveTo(5,5,10,2,r,-1);ctx.stroke();

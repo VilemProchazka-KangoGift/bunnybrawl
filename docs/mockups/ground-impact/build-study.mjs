@@ -13,4 +13,4 @@ const names=Object.keys(JSON.parse(helpers.match(/const sizes=(.*);/)[1].replace
 const characters=Object.fromEntries(names.map(name=>[name,'data:image/webp;base64,'+fs.readFileSync(new URL('../../../src/engine/characters/plush/assets/'+name.toLowerCase()+'.webp',import.meta.url)).toString('base64')]));
 const backdrop=read('../movement-vfx/index.html').match(/backdrop.src='([^']+)'/)[1];
 let html=read('template.html').replace('__CHARACTERS__',JSON.stringify(characters)).replace('__BACKDROP__',backdrop).replace('/*__HELPERS__*/',helpers).replace('/*__BASELINE__*/',baseline).replace('/*__SCENE__*/',read('scene.js'));
-write('index.html',html);console.log('Built four ground impact comparisons with frozen current renderer.');
+write('index.html',html);console.log('Built eight ground impact comparisons with frozen current renderer.');

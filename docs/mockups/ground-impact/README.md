@@ -13,3 +13,7 @@ Controls: character, fast stomp/hard landing, eight surfaces, clear ground/narro
 Build: node docs/mockups/ground-impact/build-study.mjs. Frozen baseline files are created only when missing; regenerate the HTML without refreshing them. Verify: node docs/mockups/ground-impact/verify.mjs with Vite on port 4239 and a matching Playwright browser.
 
 Validation: production-baseline pixel equality, four distinct options, matching pre-impact and expired frames, dent expiry while cracks remain, all nineteen characters, eight surfaces, both impact types, left/edge/night/2x/mobile checks and no browser errors passed. Tool ESLint passed. Inspected native, enlarged and edge captures. No runtime change; production build, Vitest and full game E2E were not rerun.
+
+## Chunky shape variations
+
+Added Wide zigzag split (two broad broken seams), Jagged fissures (three tapered dark cuts), Broken plates (four interlocking angular fragments), and Sparse forked cracks (fewer branching ink paths). All keep the current material-dependent fade and shared impact timing. The original four remain above them for comparison. Expanded browser checks passed for eight distinct frames, all 19 characters and eight surfaces, both impacts, edge clipping, expiry, night, 2x and mobile. The current baseline remains pixel-identical to production.
