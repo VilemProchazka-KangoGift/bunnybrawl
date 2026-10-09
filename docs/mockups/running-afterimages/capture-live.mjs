@@ -10,7 +10,7 @@ for(const mode of ['', '&simWorker=off']){
  await page.waitForTimeout(2000);
  if(mode)await page.evaluate(()=>{const p=window.__bunnyTest.state().players.find(p=>p.id==='P1');Object.assign(p,{x:510,y:280-p.height,vx:0,vy:0,state:'idle',invincibleTimer:0});});
  await page.keyboard.down('d');await page.waitForTimeout(450);
- if(mode){const puffs=await page.evaluate(()=>window.__bunnyTest.gameLoop().particleSystem._particles.filter(p=>p.shape==='heelCloud').map(p=>({shape:p.shape,size:p.size,life:p.life})));if(!puffs.length)throw Error('No real heel clouds emitted');console.log(JSON.stringify(puffs));}
+ if(mode){const puffs=await page.evaluate(()=>window.__bunnyTest.gameLoop().particleSystem._particles.filter(p=>p.shape==='heelCloud').map(p=>({shape:p.shape,size:p.size,life:p.life})));if(puffs.length)throw Error('Running heel particles should be removed');console.log(JSON.stringify(puffs));}
  await page.screenshot({path:dir+'/captures/live-'+(mode?'renderer-worker':'sim-worker')+'.png'});
  await page.keyboard.up('d');await page.waitForTimeout(400);
  if(errors.length)throw Error(errors.join('\n'));

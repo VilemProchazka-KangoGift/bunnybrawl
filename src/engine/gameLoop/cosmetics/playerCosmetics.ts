@@ -35,7 +35,6 @@ export function updatePlayerCosmetics(
   playSound: (name: string) => void,
   arena: Arena,
   inCountdown: boolean,
-  heelAccs: Accumulator<PlayerSlot>,
 ): void {
   // animFrame advance moved to Simulator.fixedUpdate — animFrame is in the
   // snapshot, so advancing it on guest's local clock (which drifts vs host)
@@ -136,14 +135,7 @@ export function updatePlayerCosmetics(
       }
 
     }
-    if (!getSlowDevice() && heelAccs.advance(player.id, dt, .2)) {
-      const behind = player.facing === 'right' ? -1 : 1;
-      const scale = player.width / 32;
-      emitParticle(player.x + player.width / 2 + behind * player.width * .3,
-        player.y + player.height - 1, behind * 9, -4, .3, 2.8 * scale, '#FFF0DB', 'heelCloud');
-    }
   } else {
-    heelAccs.clear(player.id);
     footstepAccs.clear(player.id);
   }
 

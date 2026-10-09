@@ -18,3 +18,5 @@ Shape round: Squash blobs, Bean shapes, Wispy teardrops, and Irregular clouds va
 
 Selected implementation: Irregular clouds. renderer.ts draws the same six-lobe filled silhouette through drawSpeedCloud, retaining body-relative placement, original speed threshold, emitter cadence, entry cap, alpha decay and hue shifts. Protection trails retain their original blue ovals. No footstep tuning was changed. Live capture checks confirm actual heelCloud emission and both worker modes; game-size capture inspected. TypeScript, production build, changed-file ESLint and 76 focused Vitest regressions passed. Production Playwright smoke validation is recorded below. Full Vitest/full E2E not run.
 Production Playwright smoke: nine tests passed, covering default simulation-worker and simWorker=off modes.
+
+Follow-up decision: remove Tiny heel puffs from the live game, retain footstep sounds and Irregular clouds. Historical comparison panels preserve the reviewed puffs. Live capture now asserts no heelCloud emission.

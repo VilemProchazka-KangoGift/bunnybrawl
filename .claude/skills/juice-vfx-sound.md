@@ -223,3 +223,5 @@ The [speed trail study](../../docs/mockups/running-afterimages/README.md) keeps 
 ### Irregular speed clouds
 
 Ordinary speed afterimages use drawSpeedCloud in movementEffects.ts, the selected six-lobe filled cloud silhouette. Keep the original afterimage emitter, hue and alpha behavior; protection uses blue ovals as a separate status cue. Tiny heel puffs remain 2.8 px clouds every 200 ms and can be visually masked by body-height speed trails. Confirm heelCloud in the real particle pool rather than judging emission from a busy arena screenshot. Keep the selected study alongside native-size live captures.
+
+Running heel-puff follow-up: the user removed Tiny heel puffs after selecting Irregular clouds because the tiny accent was not visible beside the speed trail. Match running now emits no footstep particles; preserve surface-aware footstep audio. Comparison pages are historical studies.
