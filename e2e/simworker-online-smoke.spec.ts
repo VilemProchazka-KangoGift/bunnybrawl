@@ -188,8 +188,15 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
       let leftGap = player.x, rightGap = arena.width - player.x - player.width;
       for (const platform of arena.platforms) {
         if (player.y + player.height <= platform.y || player.y >= platform.y + platform.height) continue;
-        if (platform.x >= player.x + player.width) rightGap = Math.min(rightGap, platform.x - player.x - player.width);
-        if (platform.x + platform.width <= player.x) leftGap = Math.min(leftGap, player.x - platform.x - platform.width);
+        // Count slight horizontal overlap as zero clearance. Ignoring it can
+        // select movement into a stump when the mirrored position straddles its edge.
+        const left = platform.x + (platform.leftCollisionInset ?? 0);
+        const right = platform.x + platform.width;
+        if ((left + right) / 2 >= player.x + player.width / 2) {
+          rightGap = Math.min(rightGap, Math.max(0, left - player.x - player.width));
+        } else {
+          leftGap = Math.min(leftGap, Math.max(0, player.x - right));
+        }
       }
       return leftGap > rightGap ? -1 : 1;
     });
