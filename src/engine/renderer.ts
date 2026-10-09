@@ -1,3 +1,4 @@
+import { drawSpeedCloud } from './rendering/movementEffects';
 import { VictoryCamera } from './rendering/victoryCamera';
 import { ThornRecoil } from './rendering/thornRecoil';
 import { CeilingSquash } from './rendering/ceilingSquash';
@@ -1342,15 +1343,15 @@ export class Renderer implements IRenderer {
               const h = (baseHsl.h + shift + 360) % 360;
               ctx.fillStyle = afterimageHslString(Math.round(h), rS, rL);
               ctx.globalAlpha = img.alpha;
-              ctx.beginPath();
-              ctx.ellipse(
-                img.x + player.width / 2,
-                img.y + player.height * 0.55,
-                player.width * 0.38,
-                player.height * 0.38,
-                0, 0, Math.PI * 2
-              );
-              ctx.fill();
+              if (player.invincibleTimer > 0) {
+                ctx.beginPath();
+                ctx.ellipse(img.x + player.width / 2, img.y + player.height * .55,
+                  player.width * .38, player.height * .38, 0, 0, Math.PI * 2);
+                ctx.fill();
+              } else {
+                drawSpeedCloud(ctx, img.x + player.width / 2, img.y + player.height * .55,
+                  player.width * .38, player.height * .38);
+              }
             }
           }
         }

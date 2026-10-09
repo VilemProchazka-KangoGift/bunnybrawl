@@ -91,3 +91,15 @@ function drawHeelPuff(ctx: Ctx2D, p: Particle, lead: number): void {
   ctx.bezierCurveTo(x+r*1.4,y-r*.1,x+r*.6,y+r*.25,x-r,y);
   ctx.fill();ctx.stroke();
 }
+
+/** Selected irregular speed-trail silhouette; caller owns color and alpha. */
+export function drawSpeedCloud(ctx: Ctx2D, x: number, y: number, rx: number, ry: number): void {
+  ctx.beginPath();ctx.moveTo(x-rx*1.28,y+ry*.08);
+  ctx.bezierCurveTo(x-rx*1.55,y-ry*.5,x-rx*.85,y-ry*.78,x-rx*.6,y-ry*.57);
+  ctx.bezierCurveTo(x-rx*.57,y-ry*1.27,x+rx*.23,y-ry*1.17,x+rx*.36,y-ry*.77);
+  ctx.bezierCurveTo(x+rx*.89,y-ry*1.03,x+rx*1.31,y-ry*.5,x+rx*1.04,y-ry*.08);
+  ctx.bezierCurveTo(x+rx*1.52,y+ry*.4,x+rx*.83,y+ry*.98,x+rx*.42,y+ry*.67);
+  ctx.bezierCurveTo(x+rx*.13,y+ry*1.16,x-rx*.55,y+ry*.94,x-rx*.64,y+ry*.54);
+  ctx.bezierCurveTo(x-rx*1.13,y+ry*.79,x-rx*1.55,y+ry*.41,x-rx*1.28,y+ry*.08);
+  ctx.closePath();ctx.fill();
+}

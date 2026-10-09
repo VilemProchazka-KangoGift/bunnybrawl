@@ -12,7 +12,6 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
 
   private afterimageAccumulators: Accumulator<PlayerSlot> = new Accumulator();
   private footstepAccumulators: Accumulator<PlayerSlot> = new Accumulator();
-  private heelAccumulators = new Accumulator<PlayerSlot>();
   private readonly _emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string, shape?: ParticleShape) => void;
 
   constructor(
@@ -33,7 +32,7 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
 
   cosmeticUpdate(dt: number): void {
     for (const player of this.state.players) {
-      if (!player.active) { this.heelAccumulators.clear(player.id); continue; }
+      if (!player.active) continue;
 
       // Skip during hitstop (player is frozen)
       if (player.hitstopTimer > 0) continue;
@@ -45,7 +44,6 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
         this.playSound,
         this.arena,
         this.state.countdown > 0,
-        this.heelAccumulators,
       );
     }
   }
@@ -53,6 +51,5 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
   cleanup(): void {
     this.afterimageAccumulators.clear();
     this.footstepAccumulators.clear();
-    this.heelAccumulators.clear();
   }
 }

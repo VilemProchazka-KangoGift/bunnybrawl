@@ -1,3 +1,4 @@
+import * as movementEffects from './rendering/movementEffects';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { appendCloudPath } from './themes/drawPrimitives';
 
@@ -100,6 +101,7 @@ function makeMockCtx() {
     beginPath: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
+    bezierCurveTo: vi.fn(),
     closePath: vi.fn(),
     arc: vi.fn(),
     ellipse: vi.fn(),
@@ -514,6 +516,20 @@ describe('Renderer — renderFrame conditional branches', () => {
     state.players[0].afterimages = [{ x: 190, y: 620, alpha: 0.5 }];
     renderer.renderFrame(state, makeArena(), []);
     expect(renderer.getDiagnostics().afterimages).toBe(true);
+  });
+
+  it('uses irregular clouds for speed trails while retaining protection ovals', () => {
+    const cloud = vi.spyOn(movementEffects, 'drawSpeedCloud');
+    const state = makeState();
+    state.players[0].invincibleTimer = 0;
+    state.players[0].afterimages = [{ x: 190, y: 620, alpha: .5 }];
+    renderer.renderFrame(state, makeArena(), []);
+    expect(cloud).toHaveBeenCalledTimes(1);
+    cloud.mockClear();
+    state.players[0].invincibleTimer = 1;
+    renderer.renderFrame(state, makeArena(), []);
+    expect(cloud).not.toHaveBeenCalled();
+    cloud.mockRestore();
   });
 
   it('uses hue-shifted hsl fillStyle for afterimages, not raw character color', () => {
