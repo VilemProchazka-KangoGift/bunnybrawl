@@ -193,11 +193,24 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
       }
       return leftGap > rightGap ? -1 : 1;
     });
-    const movementKey = direction < 0 ? 'a' : 'd';
-    await pair.guest.keyboard.down(movementKey);
-    try {
-      await pair.host.waitForFunction(direction => (window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 0) * direction > 0, direction, { timeout: 8000 });
-    } catch (error) {
+    // The player may land beside a different obstacle between mirror reads.
+    // Try the opposite direction if the first is blocked; both still require
+    // signed authoritative velocity over the real guest input transport.
+    let moved = false;
+    let movementError: unknown;
+    for (const candidate of [direction, -direction]) {
+      const movementKey = candidate < 0 ? 'a' : 'd';
+      await pair.guest.keyboard.down(movementKey);
+      try {
+        await pair.host.waitForFunction(direction => (window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 0) * direction > 0, candidate, { timeout: 8000 });
+        moved = true;
+      } catch (error) {
+        if (!(error instanceof Error) || error.name !== 'TimeoutError') throw error;
+        movementError = error;
+      } finally { await pair.guest.keyboard.up(movementKey); }
+      if (moved) break;
+    }
+    if (!moved) {
       console.error('Held guest input timeout', await pair.host.evaluate(() => {
         const state = window.__bunnyTest!.state();
         const match = window.__bunnyTest!.netMatch() as unknown as { hostAuthority: HostAuthority };
@@ -206,8 +219,8 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
           player: player && { x: player.x, y: player.y, vx: player.vx, vy: player.vy, state: player.state, active: player.active },
           input: match.hostAuthority.getNetworkInputs().get('P2') };
       }));
-      throw error;
-    } finally { await pair.guest.keyboard.up(movementKey); }
+      throw movementError;
+    }
     await pair.host.waitForFunction(() => Math.abs(window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 1) < 1, undefined, { timeout: 8000 });
     expect(await pair.host.evaluate(() => (window as Window & { __guestJumpReads: number }).__guestJumpReads)).toBe(1);
 
