@@ -219,3 +219,7 @@ Running uses one small cream heelCloud every 200ms, 300ms lifetime, 2.8px size s
 ### Running speed trail comparisons
 
 The [speed trail study](../../docs/mockups/running-afterimages/README.md) keeps Tiny heel puffs identical while comparing ordinary grounded speed trails. Freeze both emitter and renderer behavior: 30 Hz cosmetics, residual 30 ms accumulator, five-entry cap, swap-remove expiry, 4/s alpha decay, hue-shifted body ovals. Check the strict >200 px/s threshold and preserve the blue invincibility trail in every candidate, including None. Distinguish speed decoration from protection status before changing shared afterimage code.
+
+### Irregular speed clouds
+
+Ordinary speed afterimages use drawSpeedCloud in movementEffects.ts, the selected six-lobe filled cloud silhouette. Keep the original afterimage emitter, hue and alpha behavior; protection uses blue ovals as a separate status cue. Tiny heel puffs remain 2.8 px clouds every 200 ms and can be visually masked by body-height speed trails. Confirm heelCloud in the real particle pool rather than judging emission from a busy arena screenshot. Keep the selected study alongside native-size live captures.
