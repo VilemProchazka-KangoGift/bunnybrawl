@@ -15,6 +15,7 @@ import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import { drawStorybookPlatform } from './castleStationPlatforms';
+import { drawCastleCartoonBackground, drawCastleCartoonForeground } from './castleCartoonProps';
 
 const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
@@ -22,10 +23,9 @@ const RATS_CFG: GroundCritterConfig[] = [
   { platL: 1060, platR: 1260, platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
 ];
 
-// x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
-const TORCH_X = [100, 400, 640, 880, 1080] as const;
+// Four sconces flank the action. The former center torch conflicted with the chandelier.
+const TORCH_X = [100, 400, 880, 1080] as const;
 const TORCH_FLAME_Y = 580;
-const BANNER_COLORS = ['#8B0000', '#00008B', '#006400', '#4B0082'] as const;
 
 /**
  * Cobweb in a body-front-face corner. (cornerX, cornerY) is the corner anchor;
@@ -184,44 +184,49 @@ function castleBanner(x: number, y: number, colorIdx: number): ReactiveInstance 
 registerReactiveKind('castle.banner', {
   layer: 'postPlayer',
   draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
-    const data = inst.data as BannerData;
     const excite = inst.excitement;
 
     const bx = inst.pos.x;
     const by = inst.pos.y;
     const i = inst.seed;
-    const color = BANNER_COLORS[data.colorIdx % BANNER_COLORS.length];
-
     const baseSway = fastSin(time * 1.5 + i * 1.8) * 6;
     const reactSway = fastSin(time * (1.5 + excite * 4) + i * 1.8) * excite * 5;
     const sway = baseSway + reactSway;
-    const h = 35;
-
+    const wide = 14;
+    const drop = 35;
     ctx.save();
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = '#8A8A6A';
-    ctx.fillRect(bx - 14, by - 2, 28, 3);
-    ctx.fillStyle = color;
+    ctx.translate(bx, by);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#d6d9cd';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(-wide, 0); ctx.lineTo(wide, 0); ctx.stroke();
+    ctx.fillStyle = '#d7bb76';
+    for (const x of [-wide, wide]) {
+      ctx.beginPath(); ctx.ellipse(x, 0, 2, 2, 0, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.beginPath();
-    ctx.moveTo(bx - 12, by);
-    ctx.lineTo(bx + 12, by);
-    ctx.quadraticCurveTo(bx + 10 + sway * 0.5, by + h * 0.5, bx + 8 + sway, by + h);
-    ctx.lineTo(bx + sway, by + h + 12);
-    ctx.lineTo(bx - 8 + sway, by + h);
-    ctx.quadraticCurveTo(bx - 10 + sway * 0.5, by + h * 0.5, bx - 12, by);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    const ex = bx + sway * 0.3;
+    ctx.moveTo(-wide + 2, 1); ctx.lineTo(wide - 2, 1);
+    ctx.quadraticCurveTo(wide + 2 + sway * .15, 18, wide - 3 + sway, drop);
+    ctx.lineTo(sway, drop + 5); ctx.lineTo(-wide + 3 + sway, drop);
+    ctx.quadraticCurveTo(-wide - 2 + sway * .15, 18, -wide + 2, 1);
+    ctx.closePath(); ctx.fillStyle = '#574e85'; ctx.fill();
+    ctx.strokeStyle = '#24273c'; ctx.lineWidth = 1.7; ctx.stroke();
+    ctx.globalAlpha = .5;
+    ctx.fillStyle = '#8581ab';
     ctx.beginPath();
-    ctx.moveTo(ex, by + 8);
-    ctx.lineTo(ex + 6, by + 13);
-    ctx.lineTo(ex + 6, by + 22);
-    ctx.lineTo(ex, by + 27);
-    ctx.lineTo(ex - 6, by + 22);
-    ctx.lineTo(ex - 6, by + 13);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(-wide + 4, 4); ctx.lineTo(sway * .2, 5);
+    ctx.lineTo(-2 + sway * .7, drop - 4); ctx.lineTo(-wide + 3 + sway, drop - 5);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#d7bb76';
+    ctx.beginPath(); ctx.ellipse(sway * .25, 18, 5, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#574e85';
+    ctx.beginPath(); ctx.ellipse(2 + sway * .25, 16, 4.5, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d7bb76';
+    for (const x of [-4, 4]) {
+      ctx.beginPath(); ctx.ellipse(x + sway * .7, 28, 1.3, 1.3, 0, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.restore();
   },
 });
@@ -483,6 +488,7 @@ export const castle: ArenaPack = {
   },
 
   drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => {
+    if (drawCastleCartoonBackground(ctx, arena)) return;
     const ground = arena.platforms[0];
     const y = ground.y;
 
@@ -558,6 +564,7 @@ export const castle: ArenaPack = {
   },
 
   drawForegroundNature: (ctx: Ctx2D, arena: Arena) => {
+    if (drawCastleCartoonForeground(ctx, arena)) return;
     const ground = arena.platforms[0];
     const gy = ground.y;
 
@@ -806,7 +813,7 @@ export const castle: ArenaPack = {
       const tx = TORCH_X[i];
       const u = ((time * 0.3 + i * 0.31) % 1);
       ctx.globalAlpha = (1 - u) * 0.45;
-      ctx.fillStyle = '#ff9a3a';
+      ctx.fillStyle = '#a4dcf0';
       ctx.beginPath();
       ctx.arc(tx + fastSin(time * 1.5 + i) * 4, TORCH_FLAME_Y - 16 - u * 40, 1.1, 0, Math.PI * 2);
       ctx.fill();
@@ -840,12 +847,13 @@ export const castle: ArenaPack = {
         out.push(castleCobweb(c.x, c.y, c.dirX, c.dirY));
       }
     }
-    // Banners — one per banner-eligible floating platform (width >= 100).
+    // Sparse Moonlit placement leaves the center action and low shelves clear.
     const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const bx = plat.x + plat.width / 2;
       const by = plat.y + plat.height;
+      if (!(by < 430 && (bx < 250 || bx > 1030 || Math.abs(bx - 640) < 70))) continue;
       out.push(castleBanner(bx, by, i));
     }
     return out;
@@ -870,7 +878,7 @@ export const castle: ArenaPack = {
 
   musicFile: 'castle.mp3',
 
-  // L2 emitters: warm torchlight at the existing TORCH_X positions. Replaces
+  // L2 emitters: restrained cool sconce light at the existing TORCH_X positions. Replaces
   // the alpha-modulated halo in drawAnimatedBackground that gets crushed by
   // the fg-night-tint multiply at midnight; the EmitterPipeline writes to a
   // screen-blend DOM sibling that punches through.
@@ -878,8 +886,8 @@ export const castle: ArenaPack = {
     kind: 'point' as const,
     x: tx,
     y: TORCH_FLAME_Y,
-    color: { r: 255, g: 150, b: 60 },
-    intensity: 0.85,
+    color: { r: 151, g: 198, b: 228 },
+    intensity: 0.72,
     radius: 110,
     falloff: 'inverse-square' as const,
     flicker: { seed: i + 1, amplitude: 0.1 },
