@@ -282,3 +282,6 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 ### Carrot proximity blush comparisons
 - Proximity blush is computed in Renderer within 100px of active carrots; it is separate from pickup effects. Original dots use fixed collider-relative world coordinates and can drift from authored faces. Freeze that original exactly; alternatives using cheek placement need per-character/per-pose atlas anchors. Compare idle, both walk cells and jump, while preserving a no-overlay reference.
 - Selected No extra overlay: remove the blush block, nearCarrot draw argument and renderer-only proximity scan. Preserve carrot collection, AI awareness and pickup effects. Keep the original gallery frozen to its pre-change source revision.
+
+### Screen flash comparisons
+- Global screenFlash uses min(1, timer / 0.15) and covers HUD plus world. Hazard/ghost hits set only 0.06s (0.4 peak opacity); match end sets 0.15s (white peak). Compare both event strengths over matched full-arena/HUD frames, not isolated character crops. Freeze the original block; distinguish static scene/timing studies from complete impact or victory validation. Edge/corner alternatives should preserve center readability.

@@ -1,0 +1,7 @@
+function drawCurrentFlash(ctx,matchState){
+    if (matchState.screenFlash > 0) {
+      const flashAlpha = Math.min(1, matchState.screenFlash / SCREEN_FLASH_DURATION);
+      ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
+}
