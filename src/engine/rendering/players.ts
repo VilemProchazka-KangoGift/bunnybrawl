@@ -1,3 +1,4 @@
+import { drawThornWash, drawThornPulse } from './thornSlowEffects';
 import { drawBurnWisps } from './burnEffects';
 import type { Player, PlayerState, Ctx2D } from '../types';
 import type { ThemeConfig } from '../themes/types';
@@ -5,7 +6,6 @@ import type { EyebrowAnchor } from '../characters/types';
 import { ANIM_FRAME_DURATION, FAT_SCALE, HITSTOP_DURATION, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
-import { getSlowDevice } from '../perfFlags';
 import { darken } from '../fastMath';
 import { bakeRadialGradientSquare } from '../themes/utils';
 import { getIdleAction, type IdleAction } from './idleActions';
@@ -80,13 +80,6 @@ export function clearSpriteCache(): void {
 const OUTLINE_DARKEN = 0.8;
 
 const OUTLINE_OFFSETS_4: ReadonlyArray<readonly [number, number]> = [[-1,0],[1,0],[0,-1],[0,1]];
-
-const KILL_STREAK_FLAME_COLORS = [
-  'rgba(255, 100, 0, 0.3)',
-  'rgba(255, 60, 0, 0.25)',
-  'rgba(255, 200, 0, 0.2)',
-  'rgba(255, 0, 0, 0.2)',
-] as const;
 
 const AIR_LEAN_MAX_RAD = 0.14;     // ~8° at full air speed
 const RUN_LEAN_MAX_RAD = 0.06;     // ~3.4° at full ground speed — subtler than the jump lean
@@ -203,21 +196,6 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
         ctx.ellipse(cx, shadowY, 10 * shadowScale, 2 * shadowScale, 0, 0, Math.PI * 2);
         ctx.fill();
       }
-    }
-  }
-
-  // Kill streak flame aura (d) -- drawn behind character sprite
-  if (player.killStreak >= 3 && !getSlowDevice()) {
-    const now = frameTime / 1000;
-    for (let i = 0; i < 4; i++) {
-      const angle = now * 3 + i * 1.5;
-      const flameX = cx + Math.sin(angle) * 8;
-      const flameY = y + height * 0.3 + Math.cos(angle * 1.3) * 4;
-      const flameR = 8 + Math.sin(angle * 2) * 3;
-      ctx.fillStyle = KILL_STREAK_FLAME_COLORS[i];
-      ctx.beginPath();
-      ctx.arc(flameX, flameY, flameR, 0, Math.PI * 2);
-      ctx.fill();
     }
   }
 
@@ -371,12 +349,7 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
     }
     drawBurnWisps(ctx, cx, y + height, height / 40, player.burnTimer);
   } else if (drawRedPulse) {
-    // Red tint pulse overlay when hit by thorns (non-lava)
-    const pulseAlpha = Math.abs(Math.sin(slowTimer * 8)) * 0.3;
-    ctx.fillStyle = `rgba(255, 0, 0, ${pulseAlpha})`;
-    ctx.beginPath();
-    ctx.ellipse(cx, y + height * 0.5, width * 0.5, height * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawThornPulse(ctx, x, y, width, height, slowTimer);
   }
 
   // Burn hits use Ember cough; omit the legacy rectangular side indicator.
@@ -477,6 +450,7 @@ function blitWithIdleTransform(
   const dh = Math.ceil(h) + pad * 2;
   if (!idleAnimAction) {
     ctx.drawImage(cached, dx, dy, dw, dh);
+    drawThornWash(ctx, cached, dx, dy, dw, dh, player.slowTimer, player.burnTimer);
     return;
   }
   const cx = x + w / 2;
@@ -485,6 +459,7 @@ function blitWithIdleTransform(
   ctx.save();
   idleAnimAction.apply(ctx, cx, y, w, h, idleT, colors, player);
   ctx.drawImage(cached, dx, dy, dw, dh);
+  drawThornWash(ctx, cached, dx, dy, dw, dh, player.slowTimer, player.burnTimer);
   if (idleAnimAction.applyAfter) {
     idleAnimAction.applyAfter(ctx, cx, y, w, h, idleT, colors, player);
   }
@@ -685,7 +660,7 @@ export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): v
   const expression = player.expression;
   if (!expression || expression === 'normal') return;
 
-  const { x, y, width, height } = player;
+  const { x, y, width } = player;
   const cx = x + width / 2;
   const isRunning = player.state === 'run';
   const bounce = isRunning ? Math.sin(player.animFrame * Math.PI / 2) * 2 : 0;
@@ -705,15 +680,6 @@ export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): v
     ctx.moveTo(cx + anchor.rightOuter.x, yOff + anchor.rightOuter.y);
     ctx.lineTo(cx + anchor.rightInner.x, yOff + anchor.rightInner.y);
     ctx.stroke();
-  } else if (expression === 'scared') {
-    // Sweat drop on the side of the head
-    ctx.fillStyle = 'rgba(100, 180, 255, 0.7)';
-    ctx.beginPath();
-    // Teardrop shape
-    ctx.moveTo(cx + width * 0.35, yOff + height * 0.2);
-    ctx.quadraticCurveTo(cx + width * 0.42, yOff + height * 0.3, cx + width * 0.35, yOff + height * 0.35);
-    ctx.quadraticCurveTo(cx + width * 0.28, yOff + height * 0.3, cx + width * 0.35, yOff + height * 0.2);
-    ctx.fill();
   } else if (expression === 'dizzy') {
     const now = frameTime / 1000;
     for (let i = 0; i < 3; i++) {

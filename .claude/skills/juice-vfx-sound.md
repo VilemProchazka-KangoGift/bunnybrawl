@@ -257,3 +257,20 @@ Dizzy expression follows respawn protection in Simulator, rather than an indepen
 ### Chunky dizzy stars
 
 Selected chunky stars use uneven outlined four-point silhouettes with warm highlights in drawExpression. Preserve the three-star orbit, absolute frame-time phase, run bounce and protection expression trigger. Keep the original drawing frozen in the gallery and verify selected production pixels, including both worker modes during respawn protection.
+
+### Scared sweat studies
+- Scared is gated by downward velocity > 400 and a normal expression; anger and protection can override it. Compare normal fall (jump pose) and fast stomp (stomp pose), with pose echoes toggled independently. Freeze the current expression and echo geometry, retain the 32px collider anchor, and disclose any atlas adapter or omitted body transforms in comparison galleries.
+- Selected No overlay: retain scared expression state for simulation/network compatibility, but draw no generic sweat overlay. Keep authored poses and fast-stomp echoes.
+
+### Kill-streak aura studies
+- Current aura is four translucent circles behind the sprite at killStreak >= 3, suppressed by getSlowDevice(). Freeze both palette and geometry, force only the enabled gate for comparison, and keep all variants behind the character. Compare idle/run/jump at native scale across the roster; distinguish collider anchoring from atlas-size anchoring. Scripted streak activation is not a combat playtest.
+- Selected No aura: remove the renderer block and unused palette/device import; retain streak scoring, AI awareness and network state. Keep the old comparison frozen.
+
+### Angry-face cue comparisons
+- All plush packs set authoredAngryBrows, so Current and No extra overlay are identical; expression does not select a new atlas pose. Keep that intentional baseline match explicit. Eye effects need per-character, per-pose atlas anchors: idle/run/jump faces can shift significantly, especially Horse, Cat and Tiger. Use the real source cells and compare across the roster before implementing a selected cue.
+- Selected No extra overlay: current plush behavior already matches. Retain the authored-brow guard, faces and proximity expression state; merge only the comparison and selection record.
+
+### Thorn slowdown tint comparisons
+- Slowdown combines a five-second opacity pulse and a separate collider-sized red oval. Freeze and isolate them in studies; No tint removes color only unless opacity removal is explicitly selected. Burning suppresses thorn color through the renderer's else-if priority, but the shared opacity modulation still applies. Compare all roster poses and burn overlap, and disclose use of the fire-gradient fallback rather than cached fire art.
+- To restore gameplay prominence while keeping the warm wash, layer the wash with an independent pulse. Preserve the original abs(sin(slowTimer * 8)) phase and 0.3 peak fill opacity, then compare ruffled cloud, uneven comic burst and pointed thorn-petal contours. Keep the unmodified original and wash-only cards as reference; validate burn suppression and all roster poses for the combinations.
+- Selected Wash + comic burst: cache source-in silhouette masks in a WeakMap keyed by the cached sprite. Draw the wash inside the sprite transform, cancel only the shared slow-opacity factor, and preserve inherited blink/echo alpha. Keep masks off the main canvas and suppress both color layers while burning. Freeze the pre-change source revision for gallery verification after production changes.
