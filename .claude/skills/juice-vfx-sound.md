@@ -268,3 +268,4 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 
 ### Angry-face cue comparisons
 - All plush packs set authoredAngryBrows, so Current and No extra overlay are identical; expression does not select a new atlas pose. Keep that intentional baseline match explicit. Eye effects need per-character, per-pose atlas anchors: idle/run/jump faces can shift significantly, especially Horse, Cat and Tiger. Use the real source cells and compare across the roster before implementing a selected cue.
+- Selected No extra overlay: current plush behavior already matches. Retain the authored-brow guard, faces and proximity expression state; merge only the comparison and selection record.
