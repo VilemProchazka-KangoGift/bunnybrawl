@@ -1,9 +1,10 @@
 /* global window, document, innerWidth */
 import { chromium } from '../../../node_modules/playwright/index.mjs';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const dir=fileURLToPath(new URL('.',import.meta.url));fs.mkdirSync(dir+'captures',{recursive:true});
-const source=fs.readFileSync(new URL('../../../src/engine/rendering/players.ts',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+const source=execFileSync('git', ['show', '43671a41:src/engine/rendering/players.ts'], {encoding:'utf8'}).replace(/\r\n/g,'\n');
 const tint=source.split('// Red tint pulse overlay when hit by thorns (non-lava)')[1].split('    ctx.fill();')[0]+'    ctx.fill();';
 const expected='function drawCurrentTint(ctx,player){const {x,y,width,height,slowTimer}=player;const cx=x+width/2;'+tint+'\n}\n';
 if(fs.readFileSync(dir+'baseline-tint.ts.txt','utf8')!==expected)throw Error('Frozen current tint drifted');

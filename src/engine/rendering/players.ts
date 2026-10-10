@@ -1,3 +1,4 @@
+import { drawThornWash, drawThornPulse } from './thornSlowEffects';
 import { drawBurnWisps } from './burnEffects';
 import type { Player, PlayerState, Ctx2D } from '../types';
 import type { ThemeConfig } from '../themes/types';
@@ -348,12 +349,7 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
     }
     drawBurnWisps(ctx, cx, y + height, height / 40, player.burnTimer);
   } else if (drawRedPulse) {
-    // Red tint pulse overlay when hit by thorns (non-lava)
-    const pulseAlpha = Math.abs(Math.sin(slowTimer * 8)) * 0.3;
-    ctx.fillStyle = `rgba(255, 0, 0, ${pulseAlpha})`;
-    ctx.beginPath();
-    ctx.ellipse(cx, y + height * 0.5, width * 0.5, height * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawThornPulse(ctx, x, y, width, height, slowTimer);
   }
 
   // Burn hits use Ember cough; omit the legacy rectangular side indicator.
@@ -454,6 +450,7 @@ function blitWithIdleTransform(
   const dh = Math.ceil(h) + pad * 2;
   if (!idleAnimAction) {
     ctx.drawImage(cached, dx, dy, dw, dh);
+    drawThornWash(ctx, cached, dx, dy, dw, dh, player.slowTimer, player.burnTimer);
     return;
   }
   const cx = x + w / 2;
@@ -462,6 +459,7 @@ function blitWithIdleTransform(
   ctx.save();
   idleAnimAction.apply(ctx, cx, y, w, h, idleT, colors, player);
   ctx.drawImage(cached, dx, dy, dw, dh);
+  drawThornWash(ctx, cached, dx, dy, dw, dh, player.slowTimer, player.burnTimer);
   if (idleAnimAction.applyAfter) {
     idleAnimAction.applyAfter(ctx, cx, y, w, h, idleT, colors, player);
   }
