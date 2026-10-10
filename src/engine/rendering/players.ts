@@ -650,6 +650,37 @@ const DEFAULT_EYEBROW_ANCHOR: EyebrowAnchor = {
   rightInner: { x: 4, y: 13.6 },
 };
 
+/** Uneven inked stars selected in the dizzy-overlay comparison. */
+function drawComicDizzyStar(ctx: Ctx2D, x: number, y: number, r: number, rotation: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.fillStyle = '#F3CB56';
+  ctx.strokeStyle = '#765D32';
+  ctx.lineWidth = .9;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 1.2);
+  ctx.lineTo(r * .32, -r * .32);
+  ctx.lineTo(r * 1.07, -r * .1);
+  ctx.lineTo(r * .36, r * .26);
+  ctx.lineTo(r * .1, r);
+  ctx.lineTo(-r * .24, r * .34);
+  ctx.lineTo(-r, r * .14);
+  ctx.lineTo(-r * .35, -r * .27);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#FFF1A3';
+  ctx.beginPath();
+  ctx.moveTo(-r * .13, -r * .62);
+  ctx.lineTo(r * .09, -r * .23);
+  ctx.lineTo(-r * .36, -r * .03);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): void {
   const expression = player.expression;
   if (!expression || expression === 'normal') return;
@@ -684,23 +715,11 @@ export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): v
     ctx.quadraticCurveTo(cx + width * 0.28, yOff + height * 0.3, cx + width * 0.35, yOff + height * 0.2);
     ctx.fill();
   } else if (expression === 'dizzy') {
-    // 3 small yellow stars circling above the head
     const now = frameTime / 1000;
-    ctx.fillStyle = '#FFD700';
     for (let i = 0; i < 3; i++) {
-      const angle = now * 3 + (i * Math.PI * 2 / 3);
-      const starX = cx + Math.cos(angle) * 12;
-      const starY = yOff - 4 + Math.sin(angle) * 5;
-      // Draw small 4-point star
-      ctx.beginPath();
-      for (let p = 0; p < 4; p++) {
-        const sa = (p / 4) * Math.PI * 2 - Math.PI / 2;
-        const saInner = sa + Math.PI / 4;
-        ctx.lineTo(starX + Math.cos(sa) * 3, starY + Math.sin(sa) * 3);
-        ctx.lineTo(starX + Math.cos(saInner) * 1.2, starY + Math.sin(saInner) * 1.2);
-      }
-      ctx.closePath();
-      ctx.fill();
+      const angle = now * 3 + i * Math.PI * 2 / 3;
+      drawComicDizzyStar(ctx, cx + Math.cos(angle) * 12,
+        yOff - 4 + Math.sin(angle) * 5, 4.3 + i * .25, angle * .3);
     }
   }
 }
