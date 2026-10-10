@@ -253,3 +253,7 @@ Selected Wide rolling wave + droplets uses a low rounded wave and seven highligh
 ### Dizzy-star comparisons
 
 Dizzy expression follows respawn protection in Simulator, rather than an independent stun timer. Compare stars with the existing blink and shield sparks toggleable, and include no overlay. Freeze drawExpression and protectionEffects for stable current references; verify baseline pixels at several animation times and compare all 19 authored idle poses. The dizzy star anchor uses the 32px collision body, not the atlas artwork bounds. Document schematic timing and omitted entrance clouds/physics explicitly.
+
+### Chunky dizzy stars
+
+Selected chunky stars use uneven outlined four-point silhouettes with warm highlights in drawExpression. Preserve the three-star orbit, absolute frame-time phase, run bounce and protection expression trigger. Keep the original drawing frozen in the gallery and verify selected production pixels, including both worker modes during respawn protection.

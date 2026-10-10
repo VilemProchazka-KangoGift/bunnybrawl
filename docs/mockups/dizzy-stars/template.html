@@ -14,6 +14,6 @@ function draw(){ $('time').value=time;$('clock').textContent=time.toFixed(2);can
  drawPlatform(ctx,w/z);drawScene(ctx,images[$('character').value],$('character').value,time,index,$('shared').checked,$('left').checked);
  ctx.restore();canvas.setAttribute('aria-label',$('character').value+' dizzy expression: '+canvas.parentElement.querySelector('h3').textContent);});}
 $('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause':'Play'};$('replay').onclick=()=>{time=0;playing=true;$('play').textContent='Pause';draw()};$('time').oninput=()=>{time=Number($('time').value);playing=false;$('play').textContent='Play';draw()};for(const id of ['character','shared','left','night','scale','speed'])$(id).onchange=draw;for(const i of Object.values(images))i.onload=draw;new ResizeObserver(draw).observe(document.body);
-window.__dizzyStudy={baseline:(ctx,now)=>drawExpression(ctx,{x:-16,y:-32,width:32,height:32,state:'idle',expression:'dizzy'},now*1000),ready:()=>Object.values(images).every(i=>i.complete&&i.naturalWidth)};
+window.__dizzyStudy={selected:(ctx,now)=>drawComicDizzy(ctx,now,false),baseline:(ctx,now)=>drawExpression(ctx,{x:-16,y:-32,width:32,height:32,state:'idle',expression:'dizzy'},now*1000),ready:()=>Object.values(images).every(i=>i.complete&&i.naturalWidth)};
 function frame(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number($('speed').value))%2.6;last=now;draw();requestAnimationFrame(frame)}draw();requestAnimationFrame(frame);
 })();</script></body></html>

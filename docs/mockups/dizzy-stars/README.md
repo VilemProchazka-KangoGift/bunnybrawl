@@ -12,4 +12,8 @@ Rebuild with `node docs/mockups/dizzy-stars/build-study.mjs`. Serve via Vite and
 
 Validation: browser checks passed for exact production baseline at seven times, all 19 characters, four distinct active options, identical pre/post-protection scenes, shared/isolated protection, left, night, native/2x and 360px mobile without overflow or page errors. Builder/verifier ESLint passed. The first navigation timed out during cold Vite startup; the readiness-based retry passed. Production build, Vitest and game E2E were not run for this docs-only study.
 
-Created on features/dizzy-stars from origin/main at 3d25a114. Production source is unchanged.
+Created on features/dizzy-stars from origin/main at 3d25a114. Production selection is documented below.
+
+Selected for production: Chunky comic stars. The three-star orbit, animation speed, anchor, run bounce and protection timing are preserved; the gallery retains its frozen Current reference. The verifier now compares the selected drawing to production pixels.
+
+Implementation validation: selected-production pixel equality and actual canvas draw calls during natural protection in both worker modes passed. TypeScript, 67 renderer Vitest tests and production build passed. Smoke and lint completion are recorded in the PR.
