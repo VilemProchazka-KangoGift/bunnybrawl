@@ -269,3 +269,6 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 ### Angry-face cue comparisons
 - All plush packs set authoredAngryBrows, so Current and No extra overlay are identical; expression does not select a new atlas pose. Keep that intentional baseline match explicit. Eye effects need per-character, per-pose atlas anchors: idle/run/jump faces can shift significantly, especially Horse, Cat and Tiger. Use the real source cells and compare across the roster before implementing a selected cue.
 - Selected No extra overlay: current plush behavior already matches. Retain the authored-brow guard, faces and proximity expression state; merge only the comparison and selection record.
+
+### Thorn slowdown tint comparisons
+- Slowdown combines a five-second opacity pulse and a separate collider-sized red oval. Freeze and isolate them in studies; No tint removes color only unless opacity removal is explicitly selected. Burning suppresses thorn color through the renderer's else-if priority, but the shared opacity modulation still applies. Compare all roster poses and burn overlap, and disclose use of the fire-gradient fallback rather than cached fire art.
