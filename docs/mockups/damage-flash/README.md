@@ -1,6 +1,6 @@
 # Directional damage flash comparisons
 
-Source: main 1fd3eb52. Production is unchanged.
+Source: main 1fd3eb52. Selected Red silhouette flash is implemented.
 
 Five options: Current red strip, Comic ink swipe, Brief silhouette flash, Red silhouette flash, No extra overlay. The study freezes the original renderer block rather than redrawing an approximation. Current uses a four-pixel red strip on the world hit side, with alpha min(0.5, remainingTimer * 3). Hazard and ghost collisions use 0.4 seconds; rocks and stomp victims use 0.3 seconds. Burning suppresses this overlay.
 
@@ -14,3 +14,5 @@ Build: `node docs/mockups/damage-flash/build-study.mjs`.
 Verify: `node docs/mockups/damage-flash/verify.mjs` with the gallery served on port 49051. Verification compares current pixels at multiple remaining timer values, both hit sides and burn states, then checks all characters and poses, both durations, activation/expiry, slowdown/burn priority, mobile layout and browser errors.
 
 Red silhouette flash retains the pale flash timing and opacity, with coral red #F04435 replacing the cream mask. Both versions remain available for comparison.
+
+Production masks the cached sprite with coral red and follows its facing/pose/body transforms. Burning and missing hit direction suppress it; masks share sprite-cache lifetime. The generic splat body gets the same red flash while the existing white hitstop flash remains on top. Authored flying corpses and blood particles retain their existing rendering.

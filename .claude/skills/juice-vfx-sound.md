@@ -277,3 +277,4 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 
 ### Directional damage flash studies
 - Damage flash is a world-side four-pixel red strip, independent of sprite facing. Hazards/ghosts set 0.4s; rocks/stomp victims set 0.3s. Burning suppresses the strip. Freeze the exact block for comparisons, offer independent hit-side/facing controls, and isolate optional slowdown/burn layers. A standing atlas study does not validate death poses or camera/hitstop feedback.
+- Selected Red silhouette flash replaces the side strip with a cached #F04435 sprite mask at min(0.78, remainingTimer * 4). Preserve trigger timers, burn gate and direction-presence gate; cancel only the shared slow fade and retain inherited blink/echo opacity. Match the generic splat silhouette for stomp victims and keep the white hitstop flash on top.

@@ -1,10 +1,11 @@
 /* global window, document, innerWidth */
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import ts from '../../../node_modules/typescript/lib/typescript.js';
 import {chromium} from '../../../node_modules/playwright/index.mjs';
 import {fileURLToPath} from 'node:url';
 const dir=fileURLToPath(new URL('.',import.meta.url));
-const source=fs.readFileSync(new URL('../../../src/engine/rendering/players.ts',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+const source=execFileSync('git', ['show', '1fd3eb52:src/engine/rendering/players.ts'], {encoding:'utf8'}).replace(/\r\n/g,'\n');
 const body=source.split('  if (player.burnTimer <= 0 && player.damageFlashTimer > 0 && player.damageFlashSide) {')[1].split('\n  }')[0];
 const expected='function drawCurrentDamage(ctx,player){const {x,y,width,height}=player;\n  if (player.burnTimer <= 0 && player.damageFlashTimer > 0 && player.damageFlashSide) {'+body+'\n  }\n}\n';
 if(fs.readFileSync(dir+'baseline-damage.ts.txt','utf8').replace(/\r\n/g,'\n')!==expected)throw Error('Current reference drift');

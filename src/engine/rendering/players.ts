@@ -1,3 +1,4 @@
+import { drawDamageSilhouette, damageFlashAlpha } from './damageFlashEffects';
 import { drawThornWash, drawThornPulse } from './thornSlowEffects';
 import { drawBurnWisps } from './burnEffects';
 import type { Player, PlayerState, Ctx2D } from '../types';
@@ -275,6 +276,13 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
 
   if (state === 'splat') {
     drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
+    const redFlash = damageFlashAlpha(player);
+    if (redFlash) {
+      ctx.fillStyle = `rgba(240,68,53,${redFlash})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, y + height - 4, width * .6, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else {
     const sitExit = authoredPose && state === 'run' && player.idleActionDuration < 0
       && !!getIdleAction(character.name, player.idleAction)?.exitDuration;
@@ -352,13 +360,6 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
     drawThornPulse(ctx, x, y, width, height, slowTimer);
   }
 
-  // Burn hits use Ember cough; omit the legacy rectangular side indicator.
-  if (player.burnTimer <= 0 && player.damageFlashTimer > 0 && player.damageFlashSide) {
-    const flashAlpha = Math.min(0.5, player.damageFlashTimer * 3);
-    const flashX = player.damageFlashSide === 'left' ? x : x + width - 4;
-    ctx.fillStyle = `rgba(255, 0, 0, ${flashAlpha})`;
-    ctx.fillRect(flashX, y, 4, height);
-  }
 
   ctx.restore();
 }
@@ -451,6 +452,7 @@ function blitWithIdleTransform(
   if (!idleAnimAction) {
     ctx.drawImage(cached, dx, dy, dw, dh);
     drawThornWash(ctx, cached, dx, dy, dw, dh, player.slowTimer, player.burnTimer);
+    drawDamageSilhouette(ctx, cached, dx, dy, dw, dh, player);
     return;
   }
   const cx = x + w / 2;
@@ -460,6 +462,7 @@ function blitWithIdleTransform(
   idleAnimAction.apply(ctx, cx, y, w, h, idleT, colors, player);
   ctx.drawImage(cached, dx, dy, dw, dh);
   drawThornWash(ctx, cached, dx, dy, dw, dh, player.slowTimer, player.burnTimer);
+  drawDamageSilhouette(ctx, cached, dx, dy, dw, dh, player);
   if (idleAnimAction.applyAfter) {
     idleAnimAction.applyAfter(ctx, cx, y, w, h, idleT, colors, player);
   }
