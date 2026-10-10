@@ -265,3 +265,6 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 ### Kill-streak aura studies
 - Current aura is four translucent circles behind the sprite at killStreak >= 3, suppressed by getSlowDevice(). Freeze both palette and geometry, force only the enabled gate for comparison, and keep all variants behind the character. Compare idle/run/jump at native scale across the roster; distinguish collider anchoring from atlas-size anchoring. Scripted streak activation is not a combat playtest.
 - Selected No aura: remove the renderer block and unused palette/device import; retain streak scoring, AI awareness and network state. Keep the old comparison frozen.
+
+### Angry-face cue comparisons
+- All plush packs set authoredAngryBrows, so Current and No extra overlay are identical; expression does not select a new atlas pose. Keep that intentional baseline match explicit. Eye effects need per-character, per-pose atlas anchors: idle/run/jump faces can shift significantly, especially Horse, Cat and Tiger. Use the real source cells and compare across the roster before implementing a selected cue.
