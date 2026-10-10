@@ -160,7 +160,7 @@ export function warmSpriteCacheForCharacters(names: string[], theme?: ThemeConfi
   }
 }
 
-export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number, bumpOffset = 0, ceilingPulse = 0, thornPulse = 0, entrancePulse = 0): void {
+export function drawPlayer(ctx: Ctx2D, player: Player, theme: ThemeConfig, frameTime: number, bumpOffset = 0, ceilingPulse = 0, thornPulse = 0, entrancePulse = 0): void {
   const { width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
   // Apply visual correction offset from rollback smoothing
   const x = player.x + player.renderOffsetX;
@@ -315,17 +315,6 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
     ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
     ctx.beginPath();
     ctx.ellipse(cx, y + height - 4, width * 0.6, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Blush near carrot (c)
-  if (nearCarrot && state !== 'splat') {
-    ctx.fillStyle = 'rgba(255, 150, 180, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(cx - 8, y + height * 0.52, 4, 2.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx + 10, y + height * 0.52, 4, 2.5, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
