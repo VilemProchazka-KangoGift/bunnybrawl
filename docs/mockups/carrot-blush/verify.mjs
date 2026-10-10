@@ -1,9 +1,10 @@
 /* global window, document, innerWidth */
 import { chromium } from '../../../node_modules/playwright/index.mjs';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const dir=fileURLToPath(new URL('.',import.meta.url));fs.mkdirSync(dir+'captures',{recursive:true});
-const source=fs.readFileSync(new URL('../../../src/engine/rendering/players.ts',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+const source=execFileSync('git', ['show', 'a7a8d904:src/engine/rendering/players.ts'], {encoding:'utf8'}).replace(/\r\n/g,'\n');
 const expected='function drawCurrentBlush(ctx,player,nearCarrot){const {x,y,width,height,state}=player;const cx=x+width/2;\n'+source.split('  // Blush near carrot (c)\n')[1].split('  // Fire glow overlay')[0]+'}\n';if(fs.readFileSync(dir+'baseline-blush.ts.txt','utf8')!==expected)throw Error('Current blush drifted');
 const browser=await chromium.launch({headless:true});
 try{
