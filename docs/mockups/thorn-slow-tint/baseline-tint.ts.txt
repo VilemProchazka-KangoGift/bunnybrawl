@@ -1,0 +1,7 @@
+function drawCurrentTint(ctx,player){const {x,y,width,height,slowTimer}=player;const cx=x+width/2;
+    const pulseAlpha = Math.abs(Math.sin(slowTimer * 8)) * 0.3;
+    ctx.fillStyle = `rgba(255, 0, 0, ${pulseAlpha})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, y + height * 0.5, width * 0.5, height * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+}
