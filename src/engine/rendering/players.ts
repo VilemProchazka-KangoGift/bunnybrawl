@@ -685,7 +685,7 @@ export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): v
   const expression = player.expression;
   if (!expression || expression === 'normal') return;
 
-  const { x, y, width, height } = player;
+  const { x, y, width } = player;
   const cx = x + width / 2;
   const isRunning = player.state === 'run';
   const bounce = isRunning ? Math.sin(player.animFrame * Math.PI / 2) * 2 : 0;
@@ -705,15 +705,6 @@ export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): v
     ctx.moveTo(cx + anchor.rightOuter.x, yOff + anchor.rightOuter.y);
     ctx.lineTo(cx + anchor.rightInner.x, yOff + anchor.rightInner.y);
     ctx.stroke();
-  } else if (expression === 'scared') {
-    // Sweat drop on the side of the head
-    ctx.fillStyle = 'rgba(100, 180, 255, 0.7)';
-    ctx.beginPath();
-    // Teardrop shape
-    ctx.moveTo(cx + width * 0.35, yOff + height * 0.2);
-    ctx.quadraticCurveTo(cx + width * 0.42, yOff + height * 0.3, cx + width * 0.35, yOff + height * 0.35);
-    ctx.quadraticCurveTo(cx + width * 0.28, yOff + height * 0.3, cx + width * 0.35, yOff + height * 0.2);
-    ctx.fill();
   } else if (expression === 'dizzy') {
     const now = frameTime / 1000;
     for (let i = 0; i < 3; i++) {

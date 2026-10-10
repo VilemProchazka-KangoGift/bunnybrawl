@@ -260,3 +260,4 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 
 ### Scared sweat studies
 - Scared is gated by downward velocity > 400 and a normal expression; anger and protection can override it. Compare normal fall (jump pose) and fast stomp (stomp pose), with pose echoes toggled independently. Freeze the current expression and echo geometry, retain the 32px collider anchor, and disclose any atlas adapter or omitted body transforms in comparison galleries.
+- Selected No overlay: retain scared expression state for simulation/network compatibility, but draw no generic sweat overlay. Keep authored poses and fast-stomp echoes.
