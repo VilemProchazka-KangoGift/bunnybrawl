@@ -16,8 +16,7 @@ describe('castle — buildReactiveDecorations', () => {
     expect(pack).toBeDefined();
     const arena = getArena('castle');
     const list = pack!.buildReactiveDecorations!(arena);
-    // Banners alone yield ~12 (one per floating platform with width >= 100);
-    // cobwebs are RNG-driven (45% chance per corner) and add several more.
+    // Sparse Moonlit banners and the existing cobwebs fill the scene.
     expect(list.length).toBeGreaterThan(10);
   });
 
@@ -56,13 +55,14 @@ describe('castle — buildReactiveDecorations', () => {
     expect(banner?.layer).toBe('postPlayer');
   });
 
-  it('emits at least one banner per banner-eligible floating platform', () => {
+  it('keeps the approved Moonlit banner placement sparse', () => {
     const pack = getArenaPack('castle');
     const arena = getArena('castle');
     const list = pack!.buildReactiveDecorations!(arena);
     const banners = list.filter((i) => i.kind === 'castle.banner');
-    // Castle has many wide floating platforms — at least 8 banner-eligible.
-    expect(banners.length).toBeGreaterThanOrEqual(8);
+    expect(banners.length).toBeGreaterThanOrEqual(4);
+    expect(banners.length).toBeLessThanOrEqual(5);
+    expect(banners.every(b => b.pos.y < 430)).toBe(true);
   });
 
   it('renders without errors at multiple windPhase slices', () => {

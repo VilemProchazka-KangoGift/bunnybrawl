@@ -80,6 +80,23 @@ const winterPropArt = {
   igloo: createBackdrop(new URL('./assets/winter-igloo.webp', import.meta.url).href),
 };
 
+// The SVG masters are kept in the castle prop study. Browser workers cannot
+// decode SVG Blobs with createImageBitmap, so runtime uses transparent WebP
+// renders of those traced paths at several times their displayed size.
+const castlePropArt = {
+  guard: createBackdrop(new URL('./assets/castle-guard-cartoon.webp', import.meta.url).href),
+  sconce: createBackdrop(new URL('./assets/castle-sconce-cartoon.webp', import.meta.url).href),
+  chandelier: createBackdrop(new URL('./assets/castle-chandelier-cartoon.webp', import.meta.url).href),
+  column: createBackdrop(new URL('./assets/castle-column-cartoon.webp', import.meta.url).href),
+};
+
+export function getCastlePropArt(): { guard: ImageBitmap | null; sconce: ImageBitmap | null; chandelier: ImageBitmap | null; column: ImageBitmap | null } {
+  return {
+    guard: castlePropArt.guard.get(), sconce: castlePropArt.sconce.get(),
+    chandelier: castlePropArt.chandelier.get(), column: castlePropArt.column.get(),
+  };
+}
+
 export function getWinterPropArt(): { leafy: ImageBitmap | null; hedge: ImageBitmap | null; igloo: ImageBitmap | null } {
   return {
     leafy: winterPropArt.leafy.get(),
@@ -114,6 +131,9 @@ export function hasIllustratedBackdrop(arenaId: string): arenaId is IllustratedA
 
 export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSignal): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId === 'castle') {
+    return Promise.all([backdrops.castle.prefetch(signal), ...Object.values(castlePropArt).map(asset => asset.prefetch(signal))]).then(() => {});
+  }
   if (arenaId === 'winter_lake') {
     return Promise.all([backdrops[arenaId].prefetch(signal), ...Object.values(winterPropArt).map(asset => asset.prefetch(signal))]).then(() => {});
   }
@@ -122,6 +142,9 @@ export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSigna
 
 export function preloadIllustratedBackdrop(arenaId: string): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId === 'castle') {
+    return Promise.all([backdrops.castle.preload(), ...Object.values(castlePropArt).map(asset => asset.preload())]).then(() => {});
+  }
   if (arenaId === 'winter_lake') {
     return Promise.all([backdrops[arenaId].preload(), ...Object.values(winterPropArt).map(asset => asset.preload())]).then(() => {});
   }

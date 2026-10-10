@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Platform material rollout</title>
+<style>
+html,body { margin:0; background:#18212b; }
+.scene { position:relative; width:1280px; height:720px; isolation:isolate; }
+.scene canvas,.tint { position:absolute; inset:0; width:1280px; height:720px; }
+#bg { z-index:1; } #night { z-index:2; opacity:0; } #fg { z-index:3; }
+.tint { z-index:4; opacity:0; background:rgb(80,100,160); mix-blend-mode:multiply; }
+#light { z-index:5; opacity:0; mix-blend-mode:screen; } #hud { z-index:8; visibility:hidden; }
+</style>
+<div class="scene"><canvas id="bg"></canvas><canvas id="night"></canvas><canvas id="fg"></canvas><div class="tint"></div><canvas id="light"></canvas><canvas id="hud"></canvas></div>
+<script type="module" src="./render.ts"></script></html>

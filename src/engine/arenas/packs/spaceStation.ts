@@ -1,21 +1,24 @@
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../../constants';
+import { fastSin } from '../../fastMath';
+import {
+  composeBend,
+  createReactiveInstance,
+  registerReactiveKind,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
+import { createSpringRenderer, createThornRenderer } from '../../themes/drawPrimitives';
+import { getFloatingPlatforms, type GroundCritterConfig, type GroundCritterState } from '../../themes/utils';
+import type { Arena, Ctx2D, Platform } from '../../types';
 import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
-import type { Arena, Platform, Ctx2D } from '../../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { fastSin } from '../../fastMath';
-import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
-import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
-import {
-  registerReactiveKind, createReactiveInstance, composeBend,
-  type ReactiveInstance,
-} from '../../gameLoop/cosmetics/reactiveDecorations';
+import { drawStorybookPlatform } from './castleStationPlatforms';
 
 const ROBOTS_CFG: GroundCritterConfig[] = [
-  { platL: 20,   platR: 200,  platTopY: 660, walkSpeed: 22, fleeSpeed: 70, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
+  { platL: 20, platR: 200, platTopY: 660, walkSpeed: 22, fleeSpeed: 70, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
   { platL: 1080, platR: 1260, platTopY: 660, walkSpeed: 24, fleeSpeed: 75, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
-  { platL: 35,   platR: 195,  platTopY: 360, walkSpeed: 18, fleeSpeed: 60, fleeRadius: 85, yTolerance: 60, turnEaseRate: 2 },
+  { platL: 35, platR: 195, platTopY: 360, walkSpeed: 18, fleeSpeed: 60, fleeRadius: 85, yTolerance: 60, turnEaseRate: 2 },
 ];
 
 function drawOneRobot(
@@ -27,7 +30,7 @@ function drawOneRobot(
   const step = fastSin(time * (state.fleeing ? 14 : 6)) * Math.abs(state.facingEase);
   ctx.save();
   ctx.translate(state.x, cfg.platTopY - 6);
-  if (state.facingEase < 0) ctx.scale(-1, 1);
+  if(state.facingEase < 0) ctx.scale(-1, 1);
   ctx.fillStyle = '#5a6a78';
   ctx.fillRect(-3, 1 - Math.max(0, step) * 1.2, 2, 5);
   ctx.fillRect(1, 1 - Math.max(0, -step) * 1.2, 2, 5);
@@ -56,146 +59,17 @@ function drawOneRobot(
 }
 
 import {
-  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
-  capFrontY, capBackY, skewPx,
-  drawPlatformRightFace, drawPlatformCap,
-  subtleDown, backIso, leftIso,
+  applyIsoInsets
 } from '../../themes/drawPrimitives';
 
 // Bg pass: cap + right face + status LEDs. Sit behind the player.
-function drawSpacePlatformBg(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
-  const rng = mulberry32(seedFor(platform.x, platform.y));
-  const cF = capFrontY(platform);
-  const cB = capBackY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
-  const sp = skewPx();
-
-  // Right face
-  drawPlatformRightFace(ctx, platform, '#14141E');
-  // Status LEDs on the right face
-  const ledPalette: Array<{ solid: string; glow: string }> = [
-    { solid: '#FF4444', glow: 'rgba(255,68,68,0.3)' },
-    { solid: '#00FF88', glow: 'rgba(0,255,136,0.3)' },
-    { solid: '#00CCFF', glow: 'rgba(0,204,255,0.3)' },
-    { solid: '#FFAA00', glow: 'rgba(255,170,0,0.3)' },
-  ];
-  const ledN = 2 + Math.floor(rng() * 2);
-  const faceCenterX = platform.x + platform.width + sp * 0.5;
-  const faceCenterYShift = -CAP_DEPTH * 0.25;
-  for (let i = 0; i < ledN; i++) {
-    const t = (i + 0.5) / ledN;
-    const ly = bodyTop + 2 + t * Math.max(1, bodyH - 4) + faceCenterYShift;
-    const led = ledPalette[Math.floor(rng() * ledPalette.length)];
-    ctx.fillStyle = led.glow;
-    ctx.beginPath();
-    ctx.arc(faceCenterX, ly, 2.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = led.solid;
-    ctx.beginPath();
-    ctx.arc(faceCenterX, ly, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Edge profiles + iso cap.
-  const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 1, amp: 0.8 });
-  const backPts = backIso(platform.x, platform.width, cB, sp);
-  const leftPts = leftIso(cB, cF, platform.x, sp);
-
-  drawPlatformCap(ctx, platform, frontPts, backPts, {
-    capColor: '#25252F',
-    capLight: 'rgba(60,70,90,0.3)',
-    drawCapTexture: (ctx2, capFront, capBack, skew) => {
-      const stripX0 = platform.x + 2;
-      const stripX1 = platform.x + platform.width + skew - 2;
-      const drawStrip = (stripY: number, direction: 'up' | 'down') => {
-        if (direction === 'down') {
-          const glow = ctx2.createLinearGradient(0, stripY, 0, stripY + 4);
-          glow.addColorStop(0, 'rgba(0,204,255,0.35)');
-          glow.addColorStop(1, 'rgba(0,204,255,0)');
-          ctx2.fillStyle = glow;
-          ctx2.fillRect(stripX0, stripY, stripX1 - stripX0, 4);
-        } else {
-          const glow = ctx2.createLinearGradient(0, stripY - 4, 0, stripY + 1);
-          glow.addColorStop(0, 'rgba(0,204,255,0)');
-          glow.addColorStop(1, 'rgba(0,204,255,0.35)');
-          ctx2.fillStyle = glow;
-          ctx2.fillRect(stripX0 - 1, stripY - 4, stripX1 - stripX0 + 2, 5);
-        }
-        ctx2.fillStyle = '#7AE8FF';
-        ctx2.fillRect(stripX0, stripY, stripX1 - stripX0, 1);
-        ctx2.fillStyle = '#0A1418';
-        const segW = 12;
-        for (let tx = stripX0 + segW - 2; tx < stripX1; tx += segW) {
-          ctx2.fillRect(tx, stripY, 2, 1);
-        }
-      };
-      drawStrip(capBack + 1, 'down');
-      if (!isGround) drawStrip(capFront - 2, 'up');
-    },
-  }, leftPts);
+function drawSpacePlatformBg(ctx: Ctx2D, platform: Platform, _isGround: boolean): void {
+  drawStorybookPlatform(ctx, platform, 'alloy');
 }
 
 // Fg pass: body face. Drawn after players for occlusion.
 function drawSpacePlatformFg(ctx: Ctx2D, platform: Platform): void {
-  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
-  const cF = capFrontY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
-
-  // Body front face — metal gradient
-  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
-  g.addColorStop(0, '#3C3C50');
-  g.addColorStop(0.5, '#2A2A3A');
-  g.addColorStop(1, '#16161E');
-  ctx.fillStyle = g;
-  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
-
-  // Horizontal seam line
-  if (bodyH >= 10) {
-    const seamY = Math.round(bodyTop + bodyH * 0.5);
-    ctx.fillStyle = 'rgba(90,100,120,0.55)';
-    ctx.fillRect(platform.x, seamY, platform.width, 1);
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(platform.x, seamY + 1, platform.width, 1);
-  }
-
-  // Bolt heads
-  const boltN = Math.max(2, Math.floor(platform.width / 60));
-  const boltY = bodyTop + bodyH * 0.5;
-  for (let i = 0; i < boltN; i++) {
-    const t = (i + 0.5) / boltN;
-    const bx = platform.x + 6 + t * (platform.width - 12);
-    ctx.fillStyle = '#0A0A12';
-    ctx.beginPath();
-    ctx.arc(bx, boltY, 1.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(150,165,190,0.6)';
-    ctx.beginPath();
-    ctx.arc(bx - 0.4, boltY - 0.5, 0.7, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Hazard stripe
-  const stripeH = Math.min(4, bodyH * 0.18);
-  if (stripeH >= 2) {
-    const stripeY = bodyTop + bodyH - stripeH;
-    ctx.fillStyle = '#C9A514';
-    ctx.fillRect(platform.x, stripeY, platform.width, stripeH);
-    ctx.fillStyle = 'rgba(14,14,22,0.9)';
-    const step = 8;
-    for (let sx = platform.x - stripeH; sx < platform.x + platform.width; sx += step) {
-      ctx.beginPath();
-      ctx.moveTo(sx, stripeY + stripeH);
-      ctx.lineTo(sx + stripeH, stripeY);
-      ctx.lineTo(sx + stripeH + step * 0.45, stripeY);
-      ctx.lineTo(sx + step * 0.45, stripeY + stripeH);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-  // Reference rng so unused-warning is suppressed; cheap noise fleck for grain.
-  if (rng() < 0) ctx.fillRect(0, 0, 0, 0);
+  drawStorybookPlatform(ctx, platform, 'alloy', true);
 }
 
 // ============================================================================
