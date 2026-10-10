@@ -1,8 +1,8 @@
 # Full-screen hit flash comparisons
 
-Four options: Current white flash, Soft edge flash, Comic corner accents, No screen flash. Production is unchanged. Fresh worktree based on main 9251b3c0.
+Four options: Current white flash, Soft edge flash, Comic corner accents, No screen flash. Selected: Current white flash, triggered by point increases. Fresh worktree based on main 9251b3c0.
 
-Current fills the entire logical 1280×720 canvas with white at min(1, screenFlash / 0.15), including the HUD. Hazard-zone and ghost collisions initialize screenFlash to 0.06 seconds, so peak opacity is 0.4. Match end initializes it to 0.15 seconds, for a full-white peak. The same overlay math is used in match and lobby paths. The gallery freezes the exact match block.
+Current fills the entire logical 1280×720 canvas with white at min(1, screenFlash / 0.15), including the HUD. Score increases initialize screenFlash to 0.06 seconds, so peak opacity is 0.4. Lava, ghosts and thorns do not trigger it. Match end initializes it to 0.15 seconds, for a full-white peak. The same overlay math is used in match and lobby paths. The gallery freezes the exact match block.
 
 Soft edge flash uses cream gradients along four screen edges, with a clear center. Comic corner accents use irregular cream/ink corner shapes. Both use the same timer phase as Current. No screen flash adds no overlay. These are alternatives for the global screen layer, separate from red damage silhouettes, Pain jolt, burn effects and death poses.
 

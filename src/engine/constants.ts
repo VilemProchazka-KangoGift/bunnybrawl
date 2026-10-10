@@ -100,6 +100,7 @@ export const SHOCKWAVE_DURATION = 0.4;
 
 // Screen flash
 export const SCREEN_FLASH_DURATION = 0.15;
+export const GAMEPLAY_SCREEN_FLASH_DURATION = 0.06;
 
 // Spring trail
 export const SPRING_TRAIL_DURATION = 0.35;

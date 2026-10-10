@@ -285,3 +285,4 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 
 ### Screen flash comparisons
 - Global screenFlash uses min(1, timer / 0.15) and covers HUD plus world. Hazard/ghost hits set only 0.06s (0.4 peak opacity); match end sets 0.15s (white peak). Compare both event strengths over matched full-arena/HUD frames, not isolated character crops. Freeze the original block; distinguish static scene/timing studies from complete impact or victory validation. Edge/corner alternatives should preserve center readability.
+- Selected Current white flash: trigger 0.06s from the shared player score-increase transition, covering kills and carrot pickups. Remove lava, ghost and thorn flash requests; retain their local feedback. Use Math.max to preserve stronger match-end flashes. Priming/resetting the score baseline must not replay points; kills without a score increase intentionally do not flash.

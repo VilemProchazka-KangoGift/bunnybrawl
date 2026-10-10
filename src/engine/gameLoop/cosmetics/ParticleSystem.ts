@@ -166,9 +166,6 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     const { px, py } = hit;
     switch (hit.type) {
       case 'thorn': {
-        if (!resimulating) {
-          state.screenFlash = Math.max(state.screenFlash, 0.18);
-        }
         // One stationary cartoon impact, with inked chips drawn from its age.
         const player = state.players.find(p => p.id === playerId);
         const scale = player ? player.width / 32 : 1;
