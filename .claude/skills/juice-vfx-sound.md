@@ -264,3 +264,4 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 
 ### Kill-streak aura studies
 - Current aura is four translucent circles behind the sprite at killStreak >= 3, suppressed by getSlowDevice(). Freeze both palette and geometry, force only the enabled gate for comparison, and keep all variants behind the character. Compare idle/run/jump at native scale across the roster; distinguish collider anchoring from atlas-size anchoring. Scripted streak activation is not a combat playtest.
+- Selected No aura: remove the renderer block and unused palette/device import; retain streak scoring, AI awareness and network state. Keep the old comparison frozen.
