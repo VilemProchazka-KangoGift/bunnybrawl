@@ -1,19 +1,20 @@
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../../constants';
+import { fastSin } from '../../fastMath';
+import {
+  composeBend,
+  createReactiveInstance,
+  registerReactiveKind,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
+import { getSlowDevice } from '../../perfFlags';
+import { BODY_SEED_OFFSET, CAP_DEPTH, applyIsoInsets, capFrontY, createSpringRenderer, createThornRenderer, drawRat, mulberry32, seedFor } from '../../themes/drawPrimitives';
+import { getFloatingPlatforms, type GroundCritterConfig } from '../../themes/utils';
+import type { Arena, Ctx2D, Platform, WeatherParticle } from '../../types';
 import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
-import type { Arena, Platform, WeatherParticle, Ctx2D } from '../../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { fastSin } from '../../fastMath';
-import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, type GroundCritterConfig } from '../../themes/utils';
-import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
-import { drawRat } from '../../themes/drawPrimitives';
-import {
-  registerReactiveKind,
-  createReactiveInstance,
-  composeBend,
-  type ReactiveInstance,
-} from '../../gameLoop/cosmetics/reactiveDecorations';
+import { drawStorybookPlatform } from './castleStationPlatforms';
 
 const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
@@ -25,13 +26,6 @@ const RATS_CFG: GroundCritterConfig[] = [
 const TORCH_X = [100, 400, 640, 880, 1080] as const;
 const TORCH_FLAME_Y = 580;
 const BANNER_COLORS = ['#8B0000', '#00008B', '#006400', '#4B0082'] as const;
-import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import {
-  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
-  capFrontY, capBackY, skewPx,
-  drawPlatformRightFace, drawPlatformCap,
-  subtleDown, backIso, leftIso,
-} from '../../themes/drawPrimitives';
 
 /**
  * Cobweb in a body-front-face corner. (cornerX, cornerY) is the corner anchor;
@@ -97,120 +91,14 @@ function drawCastleCobweb(
 
 // Bg pass: cap + right face. These always sit BEHIND the player.
 function drawCastlePlatformBg(ctx: Ctx2D, platform: Platform): void {
-  const rng = mulberry32(seedFor(platform.x, platform.y));
-  const cF = capFrontY(platform);
-  const cB = capBackY(platform);
-  const sp = skewPx();
-  const brickW = 40;
-
-  // Right face — dark stone shadow
-  drawPlatformRightFace(ctx, platform, '#2a2a2a');
-
-  // Edge profiles — subtle inward chip notches on front; iso parallelogram cap
-  // (back shifted right + left edge sloped) for the architectural feel.
-  const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 2, amp: 1.2 });
-  const backPts = backIso(platform.x, platform.width, cB, sp);
-  const leftPts = leftIso(cB, cF, platform.x, sp);
-
-  // Cap — weathered stone with worn speckles + brick-direction mortar
-  drawPlatformCap(ctx, platform, frontPts, backPts, {
-    capColor: '#8a8a8a',
-    capLight: 'rgba(255,255,255,0.12)',
-    drawCapTexture: (ctx2, capFront, capBack, skew) => {
-      // Worn darker speckles
-      ctx2.fillStyle = 'rgba(60,60,60,0.4)';
-      const speckleCount = 8 + Math.floor(rng() * 6);
-      for (let i = 0; i < speckleCount; i++) {
-        const t = rng();
-        const sx = platform.x + skew * (1 - t) + t * platform.width + (rng() - 0.5) * 4;
-        const sy = capBack + rng() * (capFront - capBack);
-        const sr = 0.4 + rng() * 0.7;
-        ctx2.beginPath();
-        ctx2.arc(sx, sy, sr, 0, Math.PI * 2);
-        ctx2.fill();
-      }
-
-      // Brick-direction mortar visible on top — two horizontal lines at 30% / 70% of cap depth
-      ctx2.fillStyle = 'rgba(42,42,42,0.55)';
-      const capDepthY = capFront - capBack;
-      for (const frac of [0.3, 0.7]) {
-        const ly = capBack + capDepthY * frac;
-        const lx0 = platform.x + skew * (1 - frac);
-        const lx1 = lx0 + platform.width;
-        ctx2.fillRect(lx0, ly, lx1 - lx0, 1);
-      }
-
-      // Vertical ticks matching body's pattern — staggered per row
-      let r = 0;
-      for (const frac of [0.3, 0.7]) {
-        const ly = capBack + capDepthY * frac;
-        const offset = (r % 2 === 1) ? brickW * 0.5 : 0;
-        const lx0 = platform.x + skew * (1 - frac);
-        for (let tx = lx0 + offset; tx <= lx0 + platform.width; tx += brickW) {
-          ctx2.fillRect(tx, ly - capDepthY * 0.2, 1, capDepthY * 0.4);
-        }
-        r++;
-      }
-    },
-  }, leftPts);
+  drawStorybookPlatform(ctx, platform, 'limestone');
 }
 
 // Fg pass: body face. Drawn AFTER players so the body occludes any player
 // whose bbox overlaps the body region — gives the iso phantom strip (between
 // plat.x and plat.x + leftCollisionInset) a "going behind" feel.
 function drawCastlePlatformFg(ctx: Ctx2D, platform: Platform, _isGround: boolean): void {
-  // Independent seed (offset from bg) so bg and fg rng streams don't interfere.
-  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
-  const cF = capFrontY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
-
-  // Body front face — gray stone gradient (light top → dark bottom)
-  const bodyGrad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
-  bodyGrad.addColorStop(0, '#7a7a7a');
-  bodyGrad.addColorStop(1, '#3a3a3a');
-  ctx.fillStyle = bodyGrad;
-  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
-
-  // Brick mortar pattern — staggered courses
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(platform.x, bodyTop, platform.width, bodyH);
-  ctx.clip();
-
-  const brickH = 12;
-  const brickW = 40;
-  ctx.fillStyle = 'rgba(42,42,42,0.5)';
-
-  // Horizontal mortar lines every ~12px
-  for (let by = bodyTop + brickH; by < bodyTop + bodyH; by += brickH) {
-    ctx.fillRect(platform.x, by, platform.width, 1);
-  }
-
-  // Vertical mortar ticks — staggered. Odd rows offset by half-brick.
-  let row = 0;
-  for (let by = bodyTop; by < bodyTop + bodyH; by += brickH) {
-    const offset = (row % 2 === 1) ? brickW * 0.5 : 0;
-    for (let bx = platform.x + offset; bx <= platform.x + platform.width; bx += brickW) {
-      ctx.fillRect(bx, by, 1, brickH);
-    }
-    row++;
-  }
-
-  // Weathering blotches — 3-4 darker ellipses
-  const blotchCount = 3 + Math.floor(rng() * 2);
-  ctx.fillStyle = 'rgba(40,40,40,0.3)';
-  for (let i = 0; i < blotchCount; i++) {
-    const bx = platform.x + rng() * platform.width;
-    const by = bodyTop + rng() * bodyH;
-    const brx = 4 + rng() * 6;
-    const bry = 2 + rng() * 4;
-    ctx.beginPath();
-    ctx.ellipse(bx, by, brx, bry, rng() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
+  drawStorybookPlatform(ctx, platform, 'limestone', true);
 }
 
 /**
