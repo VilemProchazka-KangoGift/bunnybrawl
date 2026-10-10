@@ -257,3 +257,7 @@ Dizzy expression follows respawn protection in Simulator, rather than an indepen
 ### Chunky dizzy stars
 
 Selected chunky stars use uneven outlined four-point silhouettes with warm highlights in drawExpression. Preserve the three-star orbit, absolute frame-time phase, run bounce and protection expression trigger. Keep the original drawing frozen in the gallery and verify selected production pixels, including both worker modes during respawn protection.
+
+### Scared sweat studies
+- Scared is gated by downward velocity > 400 and a normal expression; anger and protection can override it. Compare normal fall (jump pose) and fast stomp (stomp pose), with pose echoes toggled independently. Freeze the current expression and echo geometry, retain the 32px collider anchor, and disclose any atlas adapter or omitted body transforms in comparison galleries.
+- Selected No overlay: retain scared expression state for simulation/network compatibility, but draw no generic sweat overlay. Keep authored poses and fast-stomp echoes.
