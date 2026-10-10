@@ -272,3 +272,4 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 
 ### Thorn slowdown tint comparisons
 - Slowdown combines a five-second opacity pulse and a separate collider-sized red oval. Freeze and isolate them in studies; No tint removes color only unless opacity removal is explicitly selected. Burning suppresses thorn color through the renderer's else-if priority, but the shared opacity modulation still applies. Compare all roster poses and burn overlap, and disclose use of the fire-gradient fallback rather than cached fire art.
+- To restore gameplay prominence while keeping the warm wash, layer the wash with an independent pulse. Preserve the original abs(sin(slowTimer * 8)) phase and 0.3 peak fill opacity, then compare ruffled cloud, uneven comic burst and pointed thorn-petal contours. Keep the unmodified original and wash-only cards as reference; validate burn suppression and all roster poses for the combinations.

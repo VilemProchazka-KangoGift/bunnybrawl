@@ -11,3 +11,7 @@ Burn overlap suppresses every thorn color option, preserving the production bran
 All 19 real plush atlases can be reviewed in idle/run/jump, left facing, day/night, native or 2x, slow motion and timeline scrubbing. Source comes from main 43671a41. This is a comparison only; production remains unchanged.
 
 Build: `node docs/mockups/thorn-slow-tint/build-study.mjs`. Frozen snapshots survive rebuilds. Browser verification: `node docs/mockups/thorn-slow-tint/verify.mjs` on port 4253. Captures include native/detail/night/mobile, all pose controls, roster examples, opacity isolation and burn overlap.
+
+## Wash plus exaggerated pulse
+
+The second comparison section combines the warm silhouette wash with the original pulse frequency and peak fill opacity. Four combinations: Wash + original pulse, Wash + ruffled cloud, Wash + comic burst, Wash + thorn petals. New contours have irregular silhouettes, restrained pulsing ink outlines and small edge highlights. Original four options stay unchanged. Burn overlap suppresses both wash and shaped pulse, and all combinations expire with the same slowdown timer.
