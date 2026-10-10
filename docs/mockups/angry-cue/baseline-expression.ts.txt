@@ -1,0 +1,33 @@
+export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): void {
+  const expression = player.expression;
+  if (!expression || expression === 'normal') return;
+
+  const { x, y, width } = player;
+  const cx = x + width / 2;
+  const isRunning = player.state === 'run';
+  const bounce = isRunning ? Math.sin(player.animFrame * Math.PI / 2) * 2 : 0;
+  const yOff = y - bounce;
+
+  if (expression === 'angry') {
+    const pack = getCharacterPack(player.character.name);
+    // Whole-body authored poses carry their own face. The generic overlay
+    // uses fixed coordinates and drifts across the Bunny's changing head.
+    if (pack?.authoredAngryBrows) return;
+    const anchor = pack?.eyebrowAnchor ?? DEFAULT_EYEBROW_ANCHOR;
+    ctx.strokeStyle = 'rgba(200, 40, 40, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + anchor.leftOuter.x, yOff + anchor.leftOuter.y);
+    ctx.lineTo(cx + anchor.leftInner.x, yOff + anchor.leftInner.y);
+    ctx.moveTo(cx + anchor.rightOuter.x, yOff + anchor.rightOuter.y);
+    ctx.lineTo(cx + anchor.rightInner.x, yOff + anchor.rightInner.y);
+    ctx.stroke();
+  } else if (expression === 'dizzy') {
+    const now = frameTime / 1000;
+    for (let i = 0; i < 3; i++) {
+      const angle = now * 3 + i * Math.PI * 2 / 3;
+      drawComicDizzyStar(ctx, cx + Math.cos(angle) * 12,
+        yOff - 4 + Math.sin(angle) * 5, 4.3 + i * .25, angle * .3);
+    }
+  }
+}
