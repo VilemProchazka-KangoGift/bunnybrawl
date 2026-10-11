@@ -307,7 +307,7 @@ export const castle: ArenaPack = {
   weather: {
     particleCount: 15,
     types: [
-      { type: 'ember', weight: 1, sizeRange: [1, 3], vxRange: [-5, 5], vyRange: [-15, -35], rotSpeedRange: [0, 1], color: '#FF8844' },
+      { type: 'ember', weight: 1, sizeRange: [1, 3], vxRange: [-5, 5], vyRange: [-15, -35], rotSpeedRange: [0, 1], color: '#b3d9e7' },
     ],
   },
 
@@ -335,7 +335,7 @@ export const castle: ArenaPack = {
     vxRange: [-2, 2],
     vyRange: [-5, -15],
     alphaRange: [0.15, 0.4],
-    colors: ['#FFAA44', '#FF8833'],
+    colors: ['#a4dcf0', '#cadfe8'],
   },
 
   dayNight: {
@@ -672,14 +672,14 @@ export const castle: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx: Ctx2D, w: WeatherParticle) => {
-    // Torch spark — concentric circles, no rotation. Draw at world coords;
+    // Silver sconce spark — concentric circles, no rotation. Draw at world coords;
     // reset globalAlpha at end since save/restore is gone.
-    ctx.fillStyle = w.color || '#FF8844';
+    ctx.fillStyle = w.color || '#b3d9e7';
     ctx.globalAlpha = 0.7;
     ctx.beginPath();
     ctx.arc(w.x, w.y, w.size, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#FFCC66';
+    ctx.fillStyle = '#e3f1f0';
     ctx.beginPath();
     ctx.arc(w.x, w.y, w.size * 0.4, 0, Math.PI * 2);
     ctx.fill();

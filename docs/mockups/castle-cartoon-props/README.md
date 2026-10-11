@@ -1,6 +1,6 @@
 # Castle cartoon props
 
-The next review stage is the [Castle atmosphere gallery](atmosphere/README.md): matched Current, Silver Moon, Violet Vigil, and Ember Hall scenes. The [thorn silhouette gallery](thorns/README.md) remains an unselected study; production thorns are unchanged.
+The approved quieter Balanced Silver from the [Castle atmosphere gallery](atmosphere/README.md) is implemented in the playable arena. The [thorn silhouette gallery](thorns/README.md) remains an unselected study; production thorns are unchanged.
 
 The approved Moonlit props use simplified storybook silhouettes and broad light/shadow planes. The guard, sconce, chandelier, and edge column were traced to editable [SVG masters](svg/) and rendered as transparent WebP files for the game. A browser probe found that `createImageBitmap` could not decode the SVG Blob in Edge, while the WebP files loaded in both canvas-owning worker modes. Run `node docs/mockups/castle-cartoon-props/rasterize.mjs` with `CASTLE_PROPS_BROWSER` set to a local Chromium or Edge binary to regenerate the runtime files from the SVGs.
 

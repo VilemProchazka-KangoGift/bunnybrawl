@@ -11,7 +11,7 @@ type Palette = {
   rim: string;
 };
 const palettes: Record<PlatformMaterial, Palette> = {
-  limestone: { ink: '#424236', face: '#817f68', light: '#aaa68a', shade: '#5b5c4e', cap: '#b9b295', rim: '#d7cdac' },
+  limestone: { ink: '#474740', face: '#8b8b7d', light: '#b5b4a3', shade: '#626459', cap: '#bebcac', rim: '#ded8c5' },
   alloy: { ink: '#101e2e', face: '#728fa4', light: '#d2e6ef', shade: '#243c54', cap: '#e0f4fa', rim: '#3bebeb' }
 };
 type Point = [

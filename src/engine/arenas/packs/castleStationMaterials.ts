@@ -14,11 +14,11 @@ export type MaterialPalette = {
   rim: string;
 };
 const pale: Record<PlatformMaterial, string> = {
-  limestone: '#d6c9a8',
+  limestone: '#ddd8c2',
   alloy: '#f4fcff'
 };
 const deep: Record<PlatformMaterial, string> = {
-  limestone: '#514d3c',
+  limestone: '#57564b',
   alloy: '#142432'
 };
 function polygon(c: Ctx2D, points: Point[], fill: string): void {
@@ -86,8 +86,8 @@ export function paintMaterialFace(c: Ctx2D, x: number, y: number, w: number, h: 
           if (material === 'limestone')
             line(c, [[cx, yy + 2 + r() * 4], [cx + (r() - .5) * 13, yy + rh * (.2 + r() * .3)], [cx - 2 + r() * 9, yy + rh * (.5 + r() * .4)]], p.shade, .8 + r());
         }
-        brush(c, a + 4, yy + 3, Math.max(1, span - 10), Math.max(1, rh - 6), 'rgba(239,218,195,.5)', r, brick ? 16 : 28);
-        brush(c, a + span * .45, yy + rh * .4, span * .35, rh * .35, 'rgba(70,58,79,.25)', r, 11);
+        brush(c, a + 4, yy + 3, Math.max(1, span - 10), Math.max(1, rh - 6), material === 'limestone' ? 'rgba(229,225,213,.5)' : 'rgba(239,218,195,.5)', r, brick ? 16 : 28);
+        brush(c, a + span * .45, yy + rh * .4, span * .35, rh * .35, material === 'limestone' ? 'rgba(70,67,69,.25)' : 'rgba(70,58,79,.25)', r, 11);
         a = b;
       }
     }
@@ -197,7 +197,7 @@ export function paintMaterialCap(c: Ctx2D, x: number, y: number, w: number, dept
       line(c, [[l.a + 3, 3], [l.b + sp - 4, 3]], pale[material], 1);
       line(c, [[l.a + sp, 1], [l.a, depth - 1]], p.ink, .8);
       line(c, [[l.a + sp + 1.2, 2], [l.a + 1.2, 12]], p.rim, .7);
-      brush(c, l.a + 4, 5, Math.max(1, span - 5), 5, 'rgba(229,213,196,.45)', r, Math.min(23, span));
+      brush(c, l.a + 4, 5, Math.max(1, span - 5), 5, material === 'limestone' ? 'rgba(229,225,213,.45)' : 'rgba(229,213,196,.45)', r, Math.min(23, span));
       if (material === 'alloy')
         line(c, [[l.a + 7, 9], [Math.min(l.b - 3, l.a + 24), 9]], '#91cfcd', 1.1);
     }
@@ -214,10 +214,10 @@ function paintAtmosphere(c: Ctx2D, w: number, h: number, m: PlatformMaterial, r:
   for (const cell of cells(w, 24, 58, r)) {
     const x = (cell.a + cell.b) / 2, y = h * (.3 + r() * .45);
     if (m === 'limestone') {
-      polygon(c, [[x - 9, 0], [x + 4, 0], [x + 7, 3], [x, 7], [x - 5, 5]], '#5e6950');
-      line(c, [[x + 5, 0], [x + 1, h * .4], [x + 6, h * .65], [x + 3, h - 1]], '#42483a', 1.6);
-      line(c, [[x + 1, h * .4], [x - 7, h * .51]], '#42483a', 1);
-      oval(c, x - 6, y, 3, 1.4, '#636b55');
+      polygon(c, [[x - 9, 0], [x + 4, 0], [x + 7, 3], [x, 7], [x - 5, 5]], '#697064');
+      line(c, [[x + 5, 0], [x + 1, h * .4], [x + 6, h * .65], [x + 3, h - 1]], '#4c5147', 1.6);
+      line(c, [[x + 1, h * .4], [x - 7, h * .51]], '#4c5147', 1);
+      oval(c, x - 6, y, 3, 1.4, '#72776b');
     }
     else if (m === 'alloy') {
       c.fillStyle = '#0e2537';

@@ -38,10 +38,10 @@ describe('illustrated arena backdrop preload', () => {
     expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(decodeMock).toHaveBeenCalledTimes(7);
     expect(fetchMock.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([
-      expect.stringContaining('castle-painted.webp'),
-      ...['guard', 'sconce', 'chandelier', 'column'].map(name => expect.stringContaining(`castle-${name}-cartoon.webp`)),
-      expect.stringContaining('castle-guardian-rest.webp'),
-      expect.stringContaining('castle-guardian-compressed.webp'),
+      expect.stringContaining('castle-painted-balanced-silver.webp'),
+      ...['guard', 'sconce', 'chandelier', 'column'].map(name => expect.stringContaining(`castle-${name}-cartoon-balanced-silver.webp`)),
+      expect.stringContaining('castle-guardian-rest-balanced-silver.webp'),
+      expect.stringContaining('castle-guardian-compressed-balanced-silver.webp'),
     ]));
     expect(Object.values(art.getCastlePropArt())).toEqual([bitmap, bitmap, bitmap, bitmap]);
     expect(Object.values(art.getCastleGuardianArt())).toEqual([bitmap, bitmap]);
