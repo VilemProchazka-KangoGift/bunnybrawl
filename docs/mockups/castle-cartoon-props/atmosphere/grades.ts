@@ -1,7 +1,14 @@
 import type { Ctx2D } from '../../../../src/engine/types';
 
-export const CASTLE_GRADES = ['atmo-silver', 'atmo-violet', 'atmo-ember'] as const;
+export const CASTLE_GRADES = ['atmo-silver', 'atmo-violet', 'atmo-ember', 'atmo-silver-balanced', 'atmo-silver-deep', 'atmo-silver-pewter'] as const;
 export type CastleGrade = typeof CASTLE_GRADES[number];
+
+export function castlePropFilter(variant: CastleGrade): string | null {
+  if (variant === 'atmo-silver-balanced') return 'saturate(.45) brightness(1.12) contrast(1.03)';
+  if (variant === 'atmo-silver-deep') return 'saturate(.56) brightness(1.06) contrast(1.07)';
+  if (variant === 'atmo-silver-pewter') return 'grayscale(.78) brightness(1.12) contrast(1.05)';
+  return null;
+}
 
 function pool(ctx: Ctx2D, x: number, y: number, radius: number, inner: string) {
   ctx.globalCompositeOperation = 'screen';
@@ -22,6 +29,19 @@ function palette(ctx: Ctx2D, variant: CastleGrade) {
       pixels[i] = r * .79 + 39;
       pixels[i + 1] = g * .87 + 47;
       pixels[i + 2] = b * .86 + 52;
+    } else if (variant === 'atmo-silver-balanced') {
+      pixels[i] = r * .9 + 16;
+      pixels[i + 1] = g * .94 + 20;
+      pixels[i + 2] = b * .93 + 23;
+    } else if (variant === 'atmo-silver-deep') {
+      pixels[i] = r * .82 + 16;
+      pixels[i + 1] = g * .88 + 20;
+      pixels[i + 2] = b * .94 + 28;
+    } else if (variant === 'atmo-silver-pewter') {
+      const luminance = r * .27 + g * .62 + b * .11;
+      pixels[i] = luminance * .86 + 18;
+      pixels[i + 1] = luminance * .89 + 23;
+      pixels[i + 2] = luminance * .95 + 30;
     } else if (variant === 'atmo-violet') {
       pixels[i] = r * .86 + 22;
       pixels[i + 1] = g * .68 + 5;
@@ -35,7 +55,7 @@ function palette(ctx: Ctx2D, variant: CastleGrade) {
   ctx.putImageData(image, 0, 0);
 }
 
-/** Grade only Castle's static background/architecture; player sprites stay legible. */
+/** Mockup-only static backdrop palette. Foreground props are graded at their draw calls. */
 export function applyCastleGrade(ctx: Ctx2D, variant: CastleGrade) {
   ctx.save();
   palette(ctx, variant);
@@ -43,6 +63,15 @@ export function applyCastleGrade(ctx: Ctx2D, variant: CastleGrade) {
     // High-key frost silver: pale walls and broad, diffuse moon reflection.
     pool(ctx, 638, 174, 390, 'rgba(188,214,231,.32)');
     pool(ctx, 630, 590, 360, 'rgba(136,171,202,.18)');
+  } else if (variant === 'atmo-silver-balanced') {
+    pool(ctx, 638, 174, 330, 'rgba(173,202,224,.16)');
+    pool(ctx, 630, 590, 290, 'rgba(135,170,199,.1)');
+  } else if (variant === 'atmo-silver-deep') {
+    pool(ctx, 638, 174, 300, 'rgba(164,198,229,.22)');
+    pool(ctx, 630, 590, 240, 'rgba(116,155,196,.09)');
+  } else if (variant === 'atmo-silver-pewter') {
+    pool(ctx, 638, 174, 335, 'rgba(192,212,221,.22)');
+    pool(ctx, 630, 590, 265, 'rgba(145,174,192,.1)');
   } else if (variant === 'atmo-violet') {
     // Lavender wall shadows, with the moon retaining a cool blue centre.
     pool(ctx, 634, 218, 380, 'rgba(177,122,225,.32)');
