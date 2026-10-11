@@ -10,6 +10,18 @@ The four WebP files total 40,972 bytes. The small sconce is inlined by Vite; the
 
 Both captures are from the production preview after countdown. Focused tests, the production build, and direct-entry and Meadow-to-Castle switching in both worker modes passed. The deterministic initial-bundle budget passed at 158,350 / 163,840 gzip bytes. The optional constrained-browser loading probe could not launch because the bundled Playwright Chromium is absent on this machine; live captures used installed Edge.
 
+## Selected Guardian — vector trace study
+
+Guardian was selected from the rendered Bulldog variations below. Its painted source was alpha-cropped and reduced to a 200 × 156 preparation image before spline tracing; this keeps the chosen silhouette and major value planes while limiting small source texture. The **10-color trace** is the preferred master: its chipped horn, raised wings, heavy brows, tusks and paws remain visible at the 39 px display height, and the 16-color version adds little legibility. The resting master has 221 paths / 44,784 bytes; its separately drawn and traced compressed pose has 188 paths / 35,264 bytes. Both SVGs are editable and transparent.
+
+| Version | Editable source | Full Castle scene | 1:1 action-lane crop |
+| --- | --- | --- | --- |
+| Painted reference | [PNG](bulldog-renders/guardian.png) | [Open](bulldog-renders/rendered-guardian.png) | [Open](bulldog-renders/detail-rendered-guardian.png) |
+| 10-color rest + authored compression | [Rest SVG](bulldog-renders/guardian-trace-10.svg) · [Compressed SVG](bulldog-renders/guardian-compressed-trace-10.svg) | [Open](bulldog-renders/traced-guardian-10.png) | [Open](bulldog-renders/detail-traced-guardian-10.png) |
+| 16-color comparison | [SVG](bulldog-renders/guardian-trace-16.svg) | [Open](bulldog-renders/traced-guardian-16.png) | [Open](bulldog-renders/detail-traced-guardian-16.png) |
+
+The [trace script](bulldog-renders/traceGuardian.mjs) retains the crop, preparation size, and VTracer settings; it needs Playwright, installed Edge/Chromium, and `@visioncortex/vtracer` (`VTRACER_MODULE` can point to a local install). The [compressed painted source](bulldog-renders/guardian-compressed.png) was drawn as a lower crouch with paws planted and wings opened, then traced separately. The mockup currently switches poses at peak compression; motion timing and player contact require live gameplay review. Browser SVG decode succeeded for the study, but Castle's worker `createImageBitmap` previously rejected SVG Blobs. A runtime implementation should render the selected masters to compact transparent WebP, preload both with Castle, and keep the current Canvas spring as fallback. **No production spring has changed yet.**
+
 ## Rendered Stone Bulldog variations — trace after selection
 
 The Canvas Stone Bulldog below had the right creature shape but flat material and limited expression. These three transparent illustrated references explore **different Bulldog personalities** while retaining the same squat body, jowls, wings, horns, paws, and stone plinth. They are composited by the game renderer at 39 px high in identical 1280 × 720 Castle scenes. The same spring appears at rest and in a provisional compressed size study. No runtime art or collision has changed.
