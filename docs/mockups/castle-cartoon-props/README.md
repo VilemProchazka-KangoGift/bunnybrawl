@@ -10,6 +10,19 @@ The four WebP files total 40,972 bytes. The small sconce is inlined by Vite; the
 
 Both captures are from the production preview after countdown. Focused tests, the production build, and direct-entry and Meadow-to-Castle switching in both worker modes passed. The deterministic initial-bundle budget passed at 158,350 / 163,840 gzip bytes. The optional constrained-browser loading probe could not launch because the bundled Playwright Chromium is absent on this machine; live captures used installed Edge.
 
+## Rendered Stone Bulldog variations — trace after selection
+
+The Canvas Stone Bulldog below had the right creature shape but flat material and limited expression. These three transparent illustrated references explore **different Bulldog personalities** while retaining the same squat body, jowls, wings, horns, paws, and stone plinth. They are composited by the game renderer at 39 px high in identical 1280 × 720 Castle scenes. The same spring appears at rest and in a provisional compressed size study. No runtime art or collision has changed.
+
+| Direction | Source render | Full scene | 1:1 action-lane crop | Read at game size |
+| --- | --- | --- | --- | --- |
+| Canvas Bulldog | [Source](gargoyles/gargoyleVariants.ts) | [Open](gargoyles/gargoyle-bulldog.png) | [Open](gargoyles/detail-gargoyle-bulldog.png) | Flat, compact baseline. |
+| A · Cheeky | [Open](bulldog-renders/cheeky.png) | [Open](bulldog-renders/rendered-cheeky.png) | [Open](bulldog-renders/detail-rendered-cheeky.png) | Curled horns, bright eyes, smile and large cheeks. |
+| B · Unimpressed | [Open](bulldog-renders/unimpressed.png) | [Open](bulldog-renders/rendered-unimpressed.png) | [Open](bulldog-renders/detail-rendered-unimpressed.png) | Heavy drooping brows, stubborn underbite, folded wings. |
+| C · Guardian | [Open](bulldog-renders/guardian.png) | [Open](bulldog-renders/rendered-guardian.png) | [Open](bulldog-renders/detail-rendered-guardian.png) | Chipped horn, raised wings, square shoulders and playful scowl. |
+
+The [mockup compositor](bulldog-renders/renderedBulldogs.ts) crops transparent padding and displays every render at the same height. It briefly resizes the sprite to indicate compression; this is **not** an authored animation. After a direction is selected, trace the silhouette and broad light/shadow planes, simplify eyes/texture for game scale, and draw a separate compressed pose with a planted base and readable wing movement. Compare that trace against these painted references in the full scene before replacing the spring skin.
+
 ## Cartoon gargoyle spring redraw
 
 The first actionable study below failed the gargoyle test: its springs looked like masks, bells, or helmets at game size. A recognizable gargoyle needs a complete crouching creature, so the next pass deliberately gives every variant a **head and expression, horns, chest, wings, front paws, and stone base**. The variants change personality rather than only palette. All scenes use the same castle camera, characters, thorn art, props, and lighting. The spring appears at rest and compressed after contact; an additional copy sits on an upper ledge. **These are mockups, not runtime spring replacements.**
