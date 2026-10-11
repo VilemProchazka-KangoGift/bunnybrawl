@@ -9,3 +9,5 @@ Build with node docs/mockups/falling-rocks/build-study.mjs. Serve test-results/r
 Round 2 keeps Current + Chunky dust and adds four combined silhouettes: Ruffled glow + rolling dust, Comet glow + ash puffs, Comic burst + chunky dust, Broken halo + scattered dust. These preserve the frozen rock body/hot cracks while replacing only its glow fill. Trail cadence, spread, puff size and ash palette vary. All eight options share the same rock positions, rotation, size and speed.
 
 Round 3 adds four variations of Comet glow + ash puffs: Long comet + fine ash, Curling comet + rolling ash, Forked comet + split ash and Broad comet + chunky ash. The original comet remains as a reference.
+
+Selected original Comet glow + ash puffs, implemented in the lava-rock renderer with current velocity and entity simulation time. Production uses the existing hazard layer and removes all visuals when the rock becomes inactive.

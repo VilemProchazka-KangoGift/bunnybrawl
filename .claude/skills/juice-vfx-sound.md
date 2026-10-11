@@ -289,3 +289,5 @@ Selected chunky stars use uneven outlined four-point silhouettes with warm highl
 
 ### Falling-rock cue studies
 Current lava rock uses a rotating jagged body, hot cracks and a circular orange glow, with no emitted trail. Freeze the rock drawing and compare warning cues at 8-16px radius and 150-300px/s. Use the same Volcano renderer scene for every card. With multiple Renderers sharing the same unchanged state, HUD dirty tracking may only draw the first HUD; composite that identical HUD across all study cards. Scripted platform pass-through is a visual study, not collision validation.
+
+Selected Comet glow + ash puffs: four outlined grey irregular puffs spaced by current downward velocity and 65ms, plus an upward fixed-world flame silhouette at 0.3 alpha. Rotate only the original rock body/cracks. Draw in the existing lava-rock entity layer and skip inactive rocks; no particles or wire fields are needed. Pass simulation time from the entity render context for subtle puff rotation.
