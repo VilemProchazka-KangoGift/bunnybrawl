@@ -1,6 +1,6 @@
 // src/engine/gameLoop/gameplay/stomps.ts
 import type { MatchState, MatchSettings, Arena, PlayerSlot } from '../../types';
-import { SCREEN_SHAKE_DURATION, HITSTOP_DURATION } from '../../constants';
+import { HITSTOP_DURATION } from '../../constants';
 import { checkStomps, updateSplatTimers } from '../../stomp';
 import { collidePlayersHorizontal, collidePlatforms } from '../../physics';
 import type { SeededRNG } from '../../net/prng';
@@ -15,16 +15,13 @@ import type { SeededRNG } from '../../net/prng';
  */
 export function processStompsAndCollisions(
   state: MatchState, arena: Arena, settings: MatchSettings,
-  dt: number, resimulating: boolean, rng: SeededRNG | undefined,
+  dt: number, _resimulating: boolean, rng: SeededRNG | undefined,
   onStompHaptic?: (slot: PlayerSlot) => void,
   movementScale = 1,
 ): void {
   const { killFeedEntries } = checkStomps(state.players, arena.spawnPoints, state.timeElapsed, settings.mods, movementScale);
 
-  if (killFeedEntries.length > 0 && !resimulating) {
-    state.screenShake = SCREEN_SHAKE_DURATION;
-    state.hitstopZoom = HITSTOP_DURATION;
-  }
+  // Kill camera feedback follows the transported kill feed in the renderer.
 
   for (const entry of killFeedEntries) {
     const attacker = state.players.find(p => p.id === entry.attacker);

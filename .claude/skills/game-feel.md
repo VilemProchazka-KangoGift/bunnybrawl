@@ -123,3 +123,5 @@ Keep existing fireworks. Renderer-owned VictoryCamera eases to 2.2x over 3000ms,
 
 ### Kill camera comparisons
 Use the production Renderer and ParticleSystem to hold splat, gore/confetti, shockwave and score flash constant while comparing camera changes. Current transforms the foreground; its static background and separate HUD stay fixed. Seed shake per sample for repeatable timing and compare center plus both arena edges. Clamp an impact-centered zoom anchor to arena bounds. A scripted renderer study does not prove live physics, worker transport or multiplayer behavior.
+
+Selected kill camera: Directional kick, 1% quadratic zoom over 0.12s and 5px sine kick/rebound over 0.18s. Follow new kill-feed entries in the renderer, priming existing history without replay. Remove stomp writes to generic screenShake/hitstopZoom; retain per-player freeze and hazard camera feedback. Check both worker modes because renderer-only frames receive transported state.

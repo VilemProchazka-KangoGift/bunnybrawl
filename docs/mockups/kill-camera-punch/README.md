@@ -13,3 +13,5 @@ Controls: normal/quarter speed, pause/replay, timeline, center/left/right impact
 Run Vite on port 49057 and open `/bunnybrawl/docs/mockups/kill-camera-punch/index.html`. Verify with `node docs/mockups/kill-camera-punch/verify.mjs`. This checks browser loading, variants, controls, roster, blood/day/night, focused/mobile layout and screenshots; it is a renderer study, not production worker validation.
 
 Each card has live zoom (0-10%) and shake (0-20px) amplitude sliders plus Reset. Timing and motion style remain the chosen card preset. Zero disables that component independently; unmodified Current uses the production renderer camera block.
+
+Selected Directional kick with 1% zoom and 5px kick amplitude. Production follows new transported kill-feed entries in a renderer-local camera, using 0.12s zoom and 0.18s kick/rebound; initialization does not replay old kills. Hazard feedback and per-player hitstop remain separate.

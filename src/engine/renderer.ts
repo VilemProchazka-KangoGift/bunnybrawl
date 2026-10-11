@@ -1,5 +1,6 @@
 import { drawShieldSparks } from './rendering/protectionEffects';
 import { drawSpeedCloud } from './rendering/movementEffects';
+import { KillCamera } from './rendering/killCamera';
 import { VictoryCamera } from './rendering/victoryCamera';
 import { ThornRecoil } from './rendering/thornRecoil';
 import { CeilingSquash } from './rendering/ceilingSquash';
@@ -323,6 +324,7 @@ function resetDiag(d: RenderDiagnostics): void {
 
 export class Renderer implements IRenderer {
   private victoryCamera = new VictoryCamera();
+  private killCamera = new KillCamera();
   private victoryScene: OffscreenCanvas | null = null;
   private bgCanvas: RendererCanvas;
   private bgNightCanvas: RendererCanvas | null = null;
@@ -593,6 +595,7 @@ export class Renderer implements IRenderer {
    *  includes a bubble-helmet bit, so cross-arena sprite reuse is safe). */
   setTheme(theme: ThemeConfig): void {
     this.victoryCamera.clear();
+    this.killCamera.clear();
     this.theme = theme;
     this.initClouds();
     clearArenaCaches();
@@ -1184,6 +1187,16 @@ export class Renderer implements IRenderer {
       this._driveBgNightOpacity();
 
       ctx.save();
+
+      const killCamera = this.killCamera.frame(matchState, this.frameTime);
+      if (killCamera) {
+        d.hitstop = killCamera.scale > 1;
+        d.screenShake = true;
+        ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+        ctx.scale(killCamera.scale, killCamera.scale);
+        ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
+        ctx.translate(0, killCamera.y);
+      }
 
       // Hitstop zoom punch -- subtle scale centered on screen
       if (matchState.hitstopZoom > 0) {
