@@ -103,6 +103,7 @@ function makeMockCtx() {
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     bezierCurveTo: vi.fn(),
+    quadraticCurveTo: vi.fn(),
     closePath: vi.fn(),
     arc: vi.fn(),
     ellipse: vi.fn(),
