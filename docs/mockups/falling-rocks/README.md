@@ -7,3 +7,5 @@ The rock renderer is frozen verbatim in baseline-rock.ts.txt and transpiled into
 Build with node docs/mockups/falling-rocks/build-study.mjs. Serve test-results/rock-static at /bunnybrawl/ on port 49059. Verify with node docs/mockups/falling-rocks/verify.mjs. Production is unchanged.
 
 Round 2 keeps Current + Chunky dust and adds four combined silhouettes: Ruffled glow + rolling dust, Comet glow + ash puffs, Comic burst + chunky dust, Broken halo + scattered dust. These preserve the frozen rock body/hot cracks while replacing only its glow fill. Trail cadence, spread, puff size and ash palette vary. All eight options share the same rock positions, rotation, size and speed.
+
+Round 3 adds four variations of Comet glow + ash puffs: Long comet + fine ash, Curling comet + rolling ash, Forked comet + split ash and Broad comet + chunky ash. The original comet remains as a reference.
