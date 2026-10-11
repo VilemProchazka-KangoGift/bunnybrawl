@@ -5,6 +5,7 @@ function lobe(c,x,y,rx,ry,phase,fill,alpha=1) {
   c.closePath();c.fillStyle=fill;c.strokeStyle=ink;c.lineWidth=1.4;c.fill();c.stroke();c.restore();
 }
 export function drawVariant(c,z,active,t,index) {
+  if(index>=4){drawCombined(c,z,active,t,index-4);return;}
   const bottom=z.y+z.height,cx=z.x+z.width/2;
   if(!active){
     for(let i=0;i<3;i++)lobe(c,cx+(i-1)*14,bottom-6-Math.abs(Math.sin(t*1.5+i*2))*8,3+i%2,4,t+i,light,.45);
@@ -46,6 +47,44 @@ export function drawVariant(c,z,active,t,index) {
         c.beginPath();c.moveTo(x+dx-4,y+13);c.lineTo(x+dx-1,y-9);c.lineTo(x+dx+5,y+7);c.closePath();c.fillStyle=light;c.globalAlpha=.65;c.fill();c.globalAlpha=1;
       }
     }
+  }
+  c.restore();
+}
+
+function drawCombined(c,z,active,t,variant){
+  const bottom=z.y+z.height,cx=z.x+z.width/2;
+  if(!active){drawVariant(c,z,false,t,2);return;}
+  // First option preserves the original tongues and surge bubbles exactly.
+  const configs=[
+    {count:5,width:1,wiggle:1,speed:100,bubbles:23,radius:1,alpha:.16},
+    {count:4,width:1.55,wiggle:1.5,speed:90,bubbles:18,radius:1.3,alpha:.18},
+    {count:7,width:.55,wiggle:.65,speed:155,bubbles:30,radius:.7,alpha:.15},
+    {count:5,width:.9,wiggle:2,speed:110,bubbles:23,radius:1,alpha:.17},
+  ];
+  const cfg=configs[variant];
+  c.save();
+  for(let j=0;j<cfg.count;j++){
+    const x=z.x+35+j*(z.width-70)/(cfg.count-1),w=(18+(j%2)*8)*cfg.width;
+    c.beginPath();c.moveTo(x-w,bottom);
+    for(let y=bottom;y>=z.y;y-=22){
+      const bend=variant===3?Math.sin(y*.015-t*2+j)*13:0;
+      c.lineTo(x-w+Math.sin(y*.04+t*4+j)*9*cfg.wiggle+bend,y);
+    }
+    for(let y=z.y;y<=bottom;y+=22){
+      const bend=variant===3?Math.sin(y*.015-t*2+j)*13:0;
+      c.lineTo(x+w+Math.sin(y*.033+t*3+j)*11*cfg.wiggle+bend,y);
+    }
+    c.closePath();c.fillStyle=`rgba(125,206,218,${cfg.alpha})`;c.fill();
+  }
+  for(let i=0;i<cfg.bubbles;i++){
+    const f=((t*cfg.speed+i*43)%z.height)/z.height,y=bottom-f*z.height;
+    const x=variant===3
+      ? z.x+35+(i%5)*(z.width-70)/4+Math.sin(y*.015-t*2+i%5)*19
+      : cx+Math.sin(i*2.3)*z.width*.4+Math.sin(t*2+i)*9;
+    const r=(6+i%4*3)*cfg.radius;
+    lobe(c,x,y,r,r*1.17,i+t,water,.48);
+    c.beginPath();c.ellipse(x-r*.18,y-r*.18,r*.52,r*.6,-.5,Math.PI,Math.PI*1.75);c.strokeStyle=light;c.lineWidth=2;c.stroke();
+    if(i%3===0){c.beginPath();c.moveTo(x,y+r+5);c.lineTo(x-2,y+r+14);c.strokeStyle='rgba(125,206,218,.35)';c.lineWidth=2;c.stroke();}
   }
   c.restore();
 }
