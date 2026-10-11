@@ -16,6 +16,7 @@ import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import { drawStorybookPlatform } from './castleStationPlatforms';
 import { drawCastleCartoonBackground, drawCastleCartoonForeground } from './castleCartoonProps';
+import { drawCastleGuardianSpring } from './castleGuardianSpring';
 
 const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
@@ -734,7 +735,8 @@ export const castle: ArenaPack = {
     }
   }),
 
-  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, fadeAlpha) => {
+  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, fadeAlpha, contactTimer) => {
+    if (drawCastleGuardianSpring(ctx, x, y, contactTimer ?? 0)) return;
     const halfW = size * 0.45;
     const squash = 1 + bounceTimer * 0.03;
     const bodyH = size * 0.8 / squash;

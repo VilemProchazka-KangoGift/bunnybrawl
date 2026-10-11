@@ -24,7 +24,7 @@ describe('illustrated arena backdrop preload', () => {
     },
   );
 
-  it('prefetches and decodes the castle backdrop and four selected props', async () => {
+  it('prefetches and decodes the castle backdrop, props, and both Guardian spring poses', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => new Blob(['castle']) }));
     const bitmap = { width: 128 } as ImageBitmap;
     const decodeMock = vi.fn(async () => bitmap);
@@ -35,13 +35,16 @@ describe('illustrated arena backdrop preload', () => {
     await art.prefetchIllustratedBackdrop('castle');
     await art.preloadIllustratedBackdrop('castle');
 
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    expect(decodeMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(decodeMock).toHaveBeenCalledTimes(7);
     expect(fetchMock.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([
       expect.stringContaining('castle-painted.webp'),
       ...['guard', 'sconce', 'chandelier', 'column'].map(name => expect.stringContaining(`castle-${name}-cartoon.webp`)),
+      expect.stringContaining('castle-guardian-rest.webp'),
+      expect.stringContaining('castle-guardian-compressed.webp'),
     ]));
     expect(Object.values(art.getCastlePropArt())).toEqual([bitmap, bitmap, bitmap, bitmap]);
+    expect(Object.values(art.getCastleGuardianArt())).toEqual([bitmap, bitmap]);
   });
 
   it('reuses the lobby fetch and decodes only once for concurrent match requests', async () => {

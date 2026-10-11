@@ -166,7 +166,7 @@ export interface ThemeConfig {
   drawCustomThorn?: (ctx: Ctx2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void;
 
   // Optional custom spring renderer (e.g. bubble for underwater)
-  drawCustomSpring?: (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
+  drawCustomSpring?: (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number, contactTimer?: number) => void;
 
   // Optional ghost hazards (roaming enemies that hurt on touch)
   ghostConfig?: {

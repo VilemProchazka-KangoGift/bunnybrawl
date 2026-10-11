@@ -90,6 +90,17 @@ const castlePropArt = {
   column: createBackdrop(new URL('./assets/castle-column-cartoon.webp', import.meta.url).href),
 };
 
+// The editable Guardian SVG poses live in the castle study. Both worker-local
+// bitmaps must be ready before the spring skin replaces its Canvas fallback.
+const castleGuardianArt = {
+  rest: createBackdrop(new URL('./assets/castle-guardian-rest.webp', import.meta.url).href),
+  compressed: createBackdrop(new URL('./assets/castle-guardian-compressed.webp', import.meta.url).href),
+};
+
+export function getCastleGuardianArt(): { rest: ImageBitmap | null; compressed: ImageBitmap | null } {
+  return { rest: castleGuardianArt.rest.get(), compressed: castleGuardianArt.compressed.get() };
+}
+
 export function getCastlePropArt(): { guard: ImageBitmap | null; sconce: ImageBitmap | null; chandelier: ImageBitmap | null; column: ImageBitmap | null } {
   return {
     guard: castlePropArt.guard.get(), sconce: castlePropArt.sconce.get(),
@@ -132,7 +143,7 @@ export function hasIllustratedBackdrop(arenaId: string): arenaId is IllustratedA
 export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSignal): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
   if (arenaId === 'castle') {
-    return Promise.all([backdrops.castle.prefetch(signal), ...Object.values(castlePropArt).map(asset => asset.prefetch(signal))]).then(() => {});
+    return Promise.all([backdrops.castle.prefetch(signal), ...Object.values(castlePropArt).map(asset => asset.prefetch(signal)), ...Object.values(castleGuardianArt).map(asset => asset.prefetch(signal))]).then(() => {});
   }
   if (arenaId === 'winter_lake') {
     return Promise.all([backdrops[arenaId].prefetch(signal), ...Object.values(winterPropArt).map(asset => asset.prefetch(signal))]).then(() => {});
@@ -143,7 +154,7 @@ export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSigna
 export function preloadIllustratedBackdrop(arenaId: string): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
   if (arenaId === 'castle') {
-    return Promise.all([backdrops.castle.preload(), ...Object.values(castlePropArt).map(asset => asset.preload())]).then(() => {});
+    return Promise.all([backdrops.castle.preload(), ...Object.values(castlePropArt).map(asset => asset.preload()), ...Object.values(castleGuardianArt).map(asset => asset.preload())]).then(() => {});
   }
   if (arenaId === 'winter_lake') {
     return Promise.all([backdrops[arenaId].preload(), ...Object.values(winterPropArt).map(asset => asset.preload())]).then(() => {});

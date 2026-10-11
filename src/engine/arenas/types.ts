@@ -137,7 +137,7 @@ export interface ArenaPack {
   drawCustomHazardZone?: (ctx: Ctx2D, x: number, y: number, width: number, height: number, time: number) => void;
   drawCustomGhost?: (ctx: Ctx2D, x: number, y: number, size: number, alpha: number, time: number) => void;
   drawCustomThorn?: (ctx: Ctx2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void;
-  drawCustomSpring?: (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
+  drawCustomSpring?: (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number, contactTimer?: number) => void;
 
   // ---- Gameplay modifiers (types synced with ThemeConfig) ----
   /** Render a glass bubble helmet on all characters in this arena. */

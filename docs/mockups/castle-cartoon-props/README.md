@@ -20,7 +20,15 @@ Guardian was selected from the rendered Bulldog variations below. Its painted so
 | 10-color rest + authored compression | [Rest SVG](bulldog-renders/guardian-trace-10.svg) · [Compressed SVG](bulldog-renders/guardian-compressed-trace-10.svg) | [Open](bulldog-renders/traced-guardian-10.png) | [Open](bulldog-renders/detail-traced-guardian-10.png) |
 | 16-color comparison | [SVG](bulldog-renders/guardian-trace-16.svg) | [Open](bulldog-renders/traced-guardian-16.png) | [Open](bulldog-renders/detail-traced-guardian-16.png) |
 
-The [trace script](bulldog-renders/traceGuardian.mjs) retains the crop, preparation size, and VTracer settings; it needs Playwright, installed Edge/Chromium, and `@visioncortex/vtracer` (`VTRACER_MODULE` can point to a local install). The [compressed painted source](bulldog-renders/guardian-compressed.png) was drawn as a lower crouch with paws planted and wings opened, then traced separately. The mockup currently switches poses at peak compression; motion timing and player contact require live gameplay review. Browser SVG decode succeeded for the study, but Castle's worker `createImageBitmap` previously rejected SVG Blobs. A runtime implementation should render the selected masters to compact transparent WebP, preload both with Castle, and keep the current Canvas spring as fallback. **No production spring has changed yet.**
+The [trace script](bulldog-renders/traceGuardian.mjs) retains the crop, preparation size, and VTracer settings; it needs Playwright, installed Edge/Chromium, and `@visioncortex/vtracer` (`VTRACER_MODULE` can point to a local install). The [compressed painted source](bulldog-renders/guardian-compressed.png) was drawn as a lower crouch with paws planted and wings opened, then traced separately.
+
+The selected 10-color masters now drive Castle's spring. [Rasterize the two SVGs](bulldog-renders/rasterizeGuardian.mjs) to regenerate the transparent runtime WebPs: [rest](../../../src/engine/arenas/assets/castle-guardian-rest.webp) and [compressed](../../../src/engine/arenas/assets/castle-guardian-compressed.webp). The arena preloads both in the renderer's realm; if either decode fails, the complete old Canvas gargoyle remains available. The compressed drawing is selected by the raw spring contact cooldown for roughly the first 0.14 seconds after impact, then returns to rest. Its base remains planted while the spring collision square, bounce physics, and object placement stay unchanged. The full scene and 1:1 crop below show the production renderer with a resting and compressed Guardian.
+
+The two WebPs total 23,922 bytes. The production build and 15 focused tests pass. Direct Castle entry and Meadow-to-Castle switching loaded both Guardian images and rendered without page errors in the default simulation worker and `simWorker=off` modes. Those browser checks exercised loading and scene rendering; contact timing is covered by the pose-selection unit test and the fixed-contact scene below, rather than a recorded live player bounce.
+
+| Integrated Castle scene | 1:1 action-lane crop |
+| --- | --- |
+| ![Production Guardian spring in Castle](guardian-live-scene.png) | ![Rest and compressed Guardian springs](guardian-live-detail.png) |
 
 ## Rendered Stone Bulldog variations — trace after selection
 

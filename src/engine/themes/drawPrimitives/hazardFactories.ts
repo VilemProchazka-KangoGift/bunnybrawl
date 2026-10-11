@@ -19,15 +19,15 @@ export function createThornRenderer(
 }
 
 export function createSpringRenderer(
-  draw: (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, fadeAlpha: number) => void
-): (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void {
-  return (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
+  draw: (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, fadeAlpha: number, contactTimer?: number) => void
+): (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number, contactTimer?: number) => void {
+  return (ctx, x, y, size, bounceTimer, growScale, fadeAlpha, contactTimer) => {
     ctx.save();
     ctx.globalAlpha = fadeAlpha;
     ctx.translate(x, y);
     ctx.scale(growScale, growScale);
     ctx.translate(-x, -y);
-    draw(ctx, x, y, size, bounceTimer, fadeAlpha);
+    draw(ctx, x, y, size, bounceTimer, fadeAlpha, contactTimer);
     ctx.restore();
   };
 }
