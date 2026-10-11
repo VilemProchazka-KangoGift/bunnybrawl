@@ -1,3 +1,4 @@
+/* global document, window, innerWidth */
 import {chromium} from '../../../node_modules/playwright/index.mjs';
 import fs from 'node:fs';
 import {fileURLToPath} from 'node:url';
