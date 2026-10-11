@@ -16,10 +16,10 @@ export const lavaRocksEntity: EntityKind<LavaRock> = {
     updateLavaRocks(matchState, theme, dt, rng);
   },
 
-  draw(ctx, state, { theme }) {
+  draw(ctx, state, { theme, time }) {
     for (const rock of state) {
       if (!rock.active) continue;
-      drawLavaRock(ctx, rock, theme);
+      drawLavaRock(ctx, rock, theme, time);
     }
   },
 };

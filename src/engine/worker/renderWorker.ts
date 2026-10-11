@@ -21,6 +21,7 @@
  */
 
 import { Renderer } from '../renderer';
+import { registerBuiltinEntities } from '../entities';
 import { registerBuiltinArenas } from '../arenas/builtin';
 import { hasIllustratedBackdrop, preloadIllustratedBackdrop } from '../arenas/illustratedBackdropAsset';
 import { registerBuiltinCharacters } from '../characters/builtin';
@@ -103,6 +104,7 @@ const colorCache = new ColorCache();
 let particlePoolLen = 0;
 
 async function bootstrap(pocketBunny: boolean, classicCharacters: boolean, themeId: string): Promise<void> {
+  registerBuiltinEntities();
   registerBuiltinArenas();
   registerBuiltinCharacters();
   const backdropTask = preloadIllustratedBackdrop(themeId);
