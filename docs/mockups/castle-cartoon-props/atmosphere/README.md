@@ -2,12 +2,13 @@
 
 ## Silver Moon follow-up
 
-The first Silver Moon lifted only the background and made the room too pale. Its platform faces, Guardian, chandelier, and other foreground props kept the old blue-gray treatment, so they appeared pasted onto a brighter room. The follow-up below reduces the lift and grades those Castle draw calls as well. Character sprites retain their original colors for gameplay contrast. All captures use the same scene and 28 × 12 thorn samples. **Balanced Silver is my preference**; Deep Silver keeps more night depth, while Pewter is an intentionally less blue option.
+The first Silver Moon lifted only the background and made the room too pale. Its platform faces, Guardian, chandelier, and other foreground props kept the old blue-gray treatment, so they appeared pasted onto a brighter room. The follow-up below reduces the lift and grades those Castle draw calls as well. Character sprites retain their original colors for gameplay contrast. All captures use the same scene and 28 × 12 thorn samples. Balanced Silver's background lift was then reduced to about **55% of the prior adjustment** at the user's request; its prop and platform-face treatment stays the same. Deep Silver keeps more night depth, while Pewter is an intentionally less blue option.
 
 | Direction | Matched full scene | Read at game size |
 | --- | --- | --- |
 | Original Silver Moon | ![Original pale Silver Moon](atmo-silver.png) | Too pale; foreground material remains blue. |
-| Balanced Silver | ![Balanced Silver Castle](atmo-silver-balanced.png) | Moderate lift, silvered Guardian and platform faces, clear player silhouettes. |
+| Balanced Silver, previous | ![Previous Balanced Silver Castle](atmo-silver-balanced-before.png) | Coherent materials, but the background still lifted too far. |
+| Balanced Silver, quieter | ![Quieter Balanced Silver Castle](atmo-silver-balanced.png) | Reduced background lift with the same silvered Guardian and platform faces. |
 | Deep Silver | ![Deep Silver Castle](atmo-silver-deep.png) | Deeper blue shadows and slightly stronger moon focus. |
 | Pewter Moon | ![Pewter Castle](atmo-silver-pewter.png) | Desaturated stone and props; coherent, but loses some Castle color character. |
 

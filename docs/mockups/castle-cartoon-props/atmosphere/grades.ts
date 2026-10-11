@@ -30,9 +30,9 @@ function palette(ctx: Ctx2D, variant: CastleGrade) {
       pixels[i + 1] = g * .87 + 47;
       pixels[i + 2] = b * .86 + 52;
     } else if (variant === 'atmo-silver-balanced') {
-      pixels[i] = r * .9 + 16;
-      pixels[i + 1] = g * .94 + 20;
-      pixels[i + 2] = b * .93 + 23;
+      pixels[i] = r * .945 + 9;
+      pixels[i + 1] = g * .967 + 11;
+      pixels[i + 2] = b * .962 + 13;
     } else if (variant === 'atmo-silver-deep') {
       pixels[i] = r * .82 + 16;
       pixels[i + 1] = g * .88 + 20;
@@ -64,8 +64,8 @@ export function applyCastleGrade(ctx: Ctx2D, variant: CastleGrade) {
     pool(ctx, 638, 174, 390, 'rgba(188,214,231,.32)');
     pool(ctx, 630, 590, 360, 'rgba(136,171,202,.18)');
   } else if (variant === 'atmo-silver-balanced') {
-    pool(ctx, 638, 174, 330, 'rgba(173,202,224,.16)');
-    pool(ctx, 630, 590, 290, 'rgba(135,170,199,.1)');
+    pool(ctx, 638, 174, 330, 'rgba(173,202,224,.09)');
+    pool(ctx, 630, 590, 290, 'rgba(135,170,199,.055)');
   } else if (variant === 'atmo-silver-deep') {
     pool(ctx, 638, 174, 300, 'rgba(164,198,229,.22)');
     pool(ctx, 630, 590, 240, 'rgba(116,155,196,.09)');
