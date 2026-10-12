@@ -1,25 +1,41 @@
 import {drawZeroGZone} from '../../../src/engine/rendering/hazards/zones.ts';
-export function drawCue(c,z,t,variant){
+export function drawCue(c,z,t,variant,background){
   if(variant===0){drawZeroGZone(c,z,t);return;}
-  // All alternatives mark the exact gameplay bounds, including the minimal option.
-  c.save();c.strokeStyle='#65dfff';c.globalAlpha=.6;c.lineWidth=2;
-  c.strokeRect(z.x+1,z.y+1,z.width-2,z.height-2);
-  c.restore();
-  if(variant===3)return;
-  c.save();c.beginPath();c.rect(z.x,z.y,z.width,z.height);c.clip();
+  c.save();c.beginPath();c.rect(z.x+3,z.y+3,z.width-6,z.height-6);c.clip();
+  // Refract the backdrop only; characters and the exact frame remain readable.
+  for(let y=3;y<z.height-3;y+=6){
+    const phase=y/z.height*Math.PI*4-t*2;
+    const shift=variant===1?Math.sin(phase)*11:variant===2?Math.sin(phase*.6)*5:variant===3?Math.sin(phase)*7:Math.sin(phase*2)*14;
+    c.drawImage(background,z.x-16,z.y+y,z.width+32,6,z.x-16+shift,z.y+y,z.width+32,6);
+  }
+  c.lineCap='round';
   if(variant===1){
-    for(let i=0;i<30;i++){
-      const cx=z.x+35+(i*137)%(z.width-70),cy=z.y+35+(i*83)%(z.height-70);
-      const a=t*.65+i*2.4,x=cx+Math.cos(a)*24,y=cy+Math.sin(a)*17;
-      c.save();c.translate(x,y);c.rotate(a*.6);c.globalAlpha=.55+.15*Math.sin(a);
-      c.fillStyle=i%3?'#9debf1':'#fff1a9';c.strokeStyle='#467786';c.lineWidth=1.2;
-      c.beginPath();c.moveTo(-5,0);c.lineTo(-1,-4);c.lineTo(5,-1);c.lineTo(2,4);c.closePath();c.fill();c.stroke();c.restore();
+    for(let i=0;i<7;i++){
+      const y=z.y+((i*83-t*55)%z.height+z.height)%z.height;
+      c.beginPath();for(let x=0;x<=z.width;x+=12){const yy=y+Math.sin(x/95+t*1.4+i)*22;x?c.lineTo(z.x+x,yy):c.moveTo(z.x+x,yy);}
+      c.strokeStyle='rgba(70,198,255,.16)';c.lineWidth=12;c.stroke();c.strokeStyle='rgba(163,239,255,.65)';c.lineWidth=2;c.stroke();
+    }
+  }else if(variant===2){
+    c.strokeStyle='rgba(112,223,255,.48)';c.lineWidth=1.6;
+    for(let i=0;i<=10;i++){
+      c.beginPath();for(let j=0;j<=20;j++){const x=z.x+i*z.width/10+Math.sin(j*.4+t*1.5)*20,y=z.y+j*z.height/20;j?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
+    }
+    for(let i=0;i<=8;i++){
+      c.beginPath();for(let j=0;j<=24;j++){const x=z.x+j*z.width/24,y=z.y+i*z.height/8+Math.sin(j*.3-t*1.5)*16;j?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
+    }
+  }else if(variant===3){
+    for(let i=0;i<5;i++){
+      const p=((t*.23+i/5)%1),r=40+p*460;
+      c.globalAlpha=(1-p)*.75;c.strokeStyle='#a1efff';c.lineWidth=2.5;
+      c.beginPath();c.ellipse(z.x+z.width/2,z.y+z.height/2,r,r*.56,Math.sin(t*.7)*.2,0,Math.PI*2);c.stroke();
+      c.globalAlpha=(1-p)*.15;c.lineWidth=14;c.stroke();
     }
   }else{
-    for(let i=0;i<24;i++){
-      const x=z.x+24+(i*113)%(z.width-48),y=z.y+((i*71-t*48)%z.height+z.height)%z.height;
-      const g=c.createLinearGradient(0,y,0,y+55);g.addColorStop(0,'rgba(169,243,255,.5)');g.addColorStop(1,'rgba(169,243,255,0)');
-      c.strokeStyle=g;c.lineWidth=2.5;c.lineCap='round';c.beginPath();c.moveTo(x,y);c.bezierCurveTo(x-6,y+16,x+5,y+35,x,y+55);c.stroke();
+    for(let i=0;i<9;i++){
+      const y=z.y+((i*59-t*70)%z.height+z.height)%z.height;
+      c.fillStyle='rgba(58,154,231,.12)';c.fillRect(z.x,y,z.width,15);
+      c.strokeStyle='rgba(138,238,255,.72)';c.lineWidth=2;c.beginPath();c.moveTo(z.x,y);c.bezierCurveTo(z.x+z.width*.3,y+28,z.x+z.width*.7,y-28,z.x+z.width,y);c.stroke();
     }
-  }c.restore();
+  }
+  c.restore();drawZeroGZone(c,z,t);
 }
