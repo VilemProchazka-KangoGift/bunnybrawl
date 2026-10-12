@@ -13,7 +13,7 @@ fs.mkdirSync('docs/mockups/geyser-jets/captures', { recursive: true });
 await page.screenshot({ path: 'docs/mockups/geyser-jets/captures/comparison.png', fullPage: true });
 for (const state of ['active', 'dormant']) {
   await page.selectOption('#state', state);
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 16; i++) {
     await page.selectOption('#view', String(i));
     if (await page.locator('section:visible').count() !== 1) throw new Error('Focus view failed');
     await page.screenshot({ path: `docs/mockups/geyser-jets/captures/${state}-${i}.png` });
@@ -25,4 +25,4 @@ if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
 await page.screenshot({ path: 'docs/mockups/geyser-jets/captures/mobile.png', fullPage: true });
 await browser.close();
 if (errors.length) throw new Error(errors.join('\n'));
-console.log('PASS: twelve variants, active/dormant, focus views, timeline and mobile layout; no browser errors');
+console.log('PASS: sixteen variants, active/dormant, focus views, timeline and mobile layout; no browser errors');
