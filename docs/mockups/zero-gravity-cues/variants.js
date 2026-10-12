@@ -1,4 +1,4 @@
-import {drawZeroGZone} from '../../../src/engine/rendering/hazards/zones.ts';
+import {drawZeroGZone} from './original.js';
 export function drawCue(c,z,t,variant,background){
   if(variant===0){drawZeroGZone(c,z,t);return;}
   const subtle=variant>=5,grid=variant===2||variant===5;

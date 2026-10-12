@@ -120,10 +120,46 @@ export function drawZeroGZone(
   ctx: Ctx2D,
   zone: { x: number; y: number; width: number; height: number },
   time: number,
+  background?: CanvasImageSource,
+  backgroundScale = 1,
 ): void {
   ctx.save();
 
   // Pulsing background fill — gradient baked into a 1×height strip.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(zone.x + 3, zone.y + 3, zone.width - 6, zone.height - 6);
+  ctx.clip();
+  if (background) {
+    // Source coordinates use backing-store pixels; destination stays logical.
+    for (let y = 3; y < zone.height - 3; y += 6) {
+      const shift = Math.sin(y / zone.height * Math.PI * 4 - time * 0.65) * 0.75;
+      ctx.drawImage(background,
+        (zone.x - 16) * backgroundScale, (zone.y + y) * backgroundScale,
+        (zone.width + 32) * backgroundScale, 6 * backgroundScale,
+        zone.x - 16 + shift, zone.y + y, zone.width + 32, 6);
+    }
+  }
+  ctx.strokeStyle = 'rgba(112,223,255,0.13)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i <= 6; i++) {
+    for (let j = 0; j <= 20; j++) {
+      const x = zone.x + i * zone.width / 6 + Math.sin(j * 0.4 + time * 0.4) * 5;
+      const y = zone.y + j * zone.height / 20;
+      if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+  }
+  for (let i = 0; i <= 4; i++) {
+    for (let j = 0; j <= 24; j++) {
+      const x = zone.x + j * zone.width / 24;
+      const y = zone.y + i * zone.height / 4 + Math.sin(j * 0.3 - time * 0.4) * 4;
+      if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+
   ctx.globalAlpha = 0.1 + fastSin(time * 1.5) * 0.04;
   let bgStrip = cachedZeroGBgStrips.get(zone as object);
   if (!bgStrip) {

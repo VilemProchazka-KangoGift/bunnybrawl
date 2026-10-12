@@ -1270,7 +1270,7 @@ export class Renderer implements IRenderer {
         for (let zi = 0; zi < arena.effectZones.length; zi++) {
           const zone = arena.effectZones[zi];
           if (zone.type === 'zero_g') {
-            drawZeroGZone(ctx, zone, matchState.timeElapsed);
+            drawZeroGZone(ctx, zone, matchState.timeElapsed, this.bgCanvas, this._renderScale);
           } else if (zone.type === 'current') {
             // Keep the visible water below the upper stepping platforms.
             const sourceY = undefined;
