@@ -303,3 +303,5 @@ Zero gravity: Soft gravity grid retains the original dashed rectangle, corner br
 Bouncy platform overlay: removed from production after comparison. Keep Candy Land platform artwork and simulation bounce behavior; do not draw jelly wash, animated rim, arrows, underglow or wobble rectangles. The old draw helper remains only as the archived comparison reference.
 
 Fireflies: Warm ink glimmers uses a small irregular dark ink silhouette, pale amber diamond core and faint oval halo. Share the drawing between the cached 16px stamp and the no-OffscreenCanvas fallback. Keep eight existing drift paths, pulse timing and nighttime visibility; match dynamic emitter color to amber (255,220,128). Freeze the old green glow in the gallery when updating production.
+
+Shooting stars retain the original white streak and circular head. Draw them in the sky layer after celestial bodies and before clouds; fireflies stay in the foreground. Renderer tests assert moon/sky -> shooting stars -> clouds ordering. Do not include shooting stars in the foreground day/night helper.

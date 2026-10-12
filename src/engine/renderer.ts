@@ -31,7 +31,7 @@ import {
   drawCarrot, drawSpringMushroom, drawThorn,
   drawRespawnEntrances, drawWeather, drawParticles, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser,
-  drawSkyCycle, drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
+  drawSkyCycle, drawShootingStars, drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
   drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
@@ -1238,6 +1238,10 @@ export class Renderer implements IRenderer {
         { const m = this._beginMirror(ctx); this._drawWildlifeLayer(ctx, wildlife.animBackground, matchState); this._endMirror(ctx, m); }
       }
 
+      if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
+        drawShootingStars(ctx, matchState.shootingStars);
+      }
+
       const now = this.frameTime / 1000;
       const dt = now - (this.lastCloudTime || now);
       this.lastCloudTime = now;
@@ -1484,7 +1488,7 @@ export class Renderer implements IRenderer {
         d.fireworks = true;
       }
 
-      // Foreground fireflies and shooting stars (sky bodies were drawn before clouds)
+      // Foreground fireflies (shooting stars were drawn before clouds)
       if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
         drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
         d.dayNight = true;

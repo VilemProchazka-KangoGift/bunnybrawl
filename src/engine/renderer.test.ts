@@ -26,6 +26,7 @@ vi.mock('./rendering', () => ({
   drawBouncyPlatformOverlay: vi.fn(),
   drawSkyCycle: vi.fn(),
   drawDayNightCycle: vi.fn(),
+  drawShootingStars: vi.fn(),
   computeNightIntensity: vi.fn(() => 0),
   fireflyPosition: vi.fn((_i: number, _t: number, out: { x: number; y: number }) => { out.x = 0; out.y = 0; }),
   FIREFLY_COUNT: 8,
@@ -74,7 +75,7 @@ vi.mock('./debugFlags', () => ({
 import { Renderer } from './renderer';
 
 import { debugFlags } from './debugFlags';
-import { drawCarrot, drawSpringMushroom, drawThorn, drawWeather, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail, drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawSkyCycle, drawDayNightCycle, drawHUD, drawCountdown, drawPlayer } from './rendering';
+import { drawCarrot, drawSpringMushroom, drawThorn, drawWeather, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail, drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawSkyCycle, drawShootingStars, drawDayNightCycle, drawHUD, drawCountdown, drawPlayer } from './rendering';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import { drawNetDebugOverlay } from './net/core/debugOverlay';
 
@@ -605,9 +606,12 @@ describe('Renderer — renderFrame conditional branches', () => {
     expect(appendCloudPath).toHaveBeenCalled();
     expect(drawDayNightCycle).toHaveBeenCalled();
     const skyOrder = vi.mocked(drawSkyCycle).mock.invocationCallOrder[0];
+    const streakOrder = vi.mocked(drawShootingStars).mock.invocationCallOrder[0];
     const cloudOrder = vi.mocked(appendCloudPath).mock.invocationCallOrder[0];
     const foregroundOrder = vi.mocked(drawDayNightCycle).mock.invocationCallOrder[0];
     expect(skyOrder).toBeLessThan(cloudOrder);
+    expect(skyOrder).toBeLessThan(streakOrder);
+    expect(streakOrder).toBeLessThan(cloudOrder);
     expect(cloudOrder).toBeLessThan(foregroundOrder);
     expect(r.getDiagnostics().dayNight).toBe(true);
   });

@@ -5,7 +5,7 @@ import {registerBuiltinCharacters,getAllCharacterDefs} from '../../../src/engine
 import {registerPlayablePlushRoster} from '../../../src/engine/characters/plush/playableRoster.ts';
 import {makePlayer,makeState} from '../../../src/engine/__tests__/testHelpers.ts';
 
-import {drawCue} from './variants.js';
+import {drawCue,starAt} from './variants.js';
 registerBuiltinArenas();registerBuiltinCharacters();await registerPlayablePlushRoster();
 const $=id=>document.getElementById(id),arena=getArena('meadow'),originalTheme=getTheme(arena.id),theme=originalTheme;
 await preloadIllustratedBackdrop(arena.id);
@@ -17,9 +17,9 @@ let time=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,last=
 function render(){
   state.timeElapsed=time;
   state.players.forEach((p,i)=>{p.y=(i?540:430)-Math.sin(time*1.5+i)*65;});
-  panels.forEach((p,i)=>{p.renderer.renderFrame(state,sceneArena,[]);const c=p.canvas.getContext('2d');c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,1280,720);c.drawImage(p.bg,0,0,1280,720);
+  panels.forEach((p,i)=>{const star=starAt(time);state.shootingStars=i===0&&star?[star]:[];p.renderer.renderFrame(state,sceneArena,[]);const c=p.canvas.getContext('2d');c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,1280,720);c.drawImage(p.bg,0,0,1280,720);
     c.globalAlpha=p.nightOpacity;c.drawImage(p.bgNight,0,0,1280,720);c.globalAlpha=1;c.drawImage(p.fg,0,0,1280,720);
-    drawCue(c,time,i);
+    if(i!==0)drawCue(c,time,i);
     c.drawImage(panels[0].hud,0,0,1280,720);
   });$('time').value=time;$('clock').textContent=time.toFixed(2)+'s';
 }

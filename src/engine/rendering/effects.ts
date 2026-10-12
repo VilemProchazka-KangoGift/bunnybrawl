@@ -254,7 +254,7 @@ export function drawSkyCycle(ctx: Ctx2D, dayPhase: number, frameTime: number): v
 export function drawDayNightCycle(
   ctx: Ctx2D,
   dayPhase: number,
-  matchState: MatchState | undefined,
+  _matchState: MatchState | undefined,
   theme: ThemeConfig,
   frameTime: number,
 ): void {
@@ -285,12 +285,18 @@ export function drawDayNightCycle(
     }
   }
 
+  ctx.restore();
+}
+
+/** Original shooting-star streak, in the sky layer above moon and below clouds. */
+export function drawShootingStars(ctx: Ctx2D, shootingStars: MatchState['shootingStars']): void {
+  ctx.save();
   // Shooting stars
-  if (matchState?.shootingStars) {
+  if (shootingStars) {
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#FFFFFF';
     ctx.fillStyle = '#FFFFFF';
-    for (const star of matchState.shootingStars) {
+    for (const star of shootingStars) {
       const alpha = Math.min(1, star.life * 2);
       const tailLen = star.tailLen;
       const angle = Math.atan2(star.vy, star.vx);
