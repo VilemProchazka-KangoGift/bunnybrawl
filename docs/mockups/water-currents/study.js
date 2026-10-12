@@ -18,7 +18,7 @@ function render(){
   state.timeElapsed=time;
   state.players.forEach((p,i)=>{p.y=(i?540:430)-Math.sin(time*1.5+i)*65;});
   panels.forEach((p,i)=>{p.renderer.renderFrame(state,sceneArena,[]);const c=p.canvas.getContext('2d');c.clearRect(0,0,1280,720);c.drawImage(p.bg,0,0);
-    for(const zone of zones){const top=arena.id==='waterfall'&&zone.vy?65:undefined;if(i===0)drawCurrentZone(c,zone,time,top);else drawCurrentVariant(c,zone,time,i,top);}
+    for(const zone of zones){const top=undefined;if(i===0)drawCurrentZone(c,zone,time,top);else drawCurrentVariant(c,zone,time,i,top);}
     c.drawImage(p.fg,0,0);c.drawImage(panels[0].hud,0,0);
   });$('time').value=time;$('clock').textContent=time.toFixed(2)+'s';
 }

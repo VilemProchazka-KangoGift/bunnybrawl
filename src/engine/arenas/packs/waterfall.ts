@@ -422,6 +422,7 @@ export const waterfall: ArenaPack = {
   },
 
   dayNight: {
+    showCelestialBodies: false,
     enabled: true,
     cycleDuration: 120,
     maxNightAlpha: 0.55,
