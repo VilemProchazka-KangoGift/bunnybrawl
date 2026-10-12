@@ -1,6 +1,8 @@
 # Castle cartoon props
 
-The latest [royal gallery pass](royal-gallery/README.md) removes the misleading freestanding columns and adds cartoon royal portraits, upper-platform cloth and relief, and restrained wall wear. The rejected gargoyle keystones were removed. Windows are unchanged. See its matched full-scene before/after captures.
+The latest [Castle wall prop study](armory-study/README.md) compares shield-and-spear displays, weapon racks, trophy shelves, pennants and an asymmetric armory mix in matched full-scene images. The rejected royal portraits are removed from the playable Castle scene; the alternatives remain mockups pending selection. Windows are unchanged.
+
+The earlier [royal gallery pass](royal-gallery/README.md) removed the misleading freestanding columns and added upper-platform cloth and relief and restrained wall wear. Its portrait images are now a historical comparison, not the current production scene.
 
 The earlier [Castle layout pass](layout/README.md) moved the guards onto the long upper platform, relocated the clipped columns to open floor bays, distributed four sconces across clear wall bays, and lowered the chandelier. The later royal gallery pass removes those columns after they were found to imply false collision.
 

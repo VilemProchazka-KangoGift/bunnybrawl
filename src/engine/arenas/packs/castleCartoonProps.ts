@@ -2,7 +2,7 @@ import type { Arena, Ctx2D } from '../../types';
 import { getCastlePropArt } from '../illustratedBackdropAsset';
 import { drawCastleGalleryDecoration, drawCastleWallDetails } from './castleRoyalGallery';
 
-type CastleArt = { guard: ImageBitmap; sconce: ImageBitmap; chandelier: ImageBitmap; duchess: ImageBitmap | null; king: ImageBitmap | null };
+type CastleArt = { guard: ImageBitmap; sconce: ImageBitmap; chandelier: ImageBitmap };
 
 export const CASTLE_SCONCE_X = [90, 450, 830, 1190] as const;
 export const CASTLE_SCONCE_FLAME_Y = 540;
@@ -28,9 +28,6 @@ export function drawCastleCartoonBackground(c: Ctx2D, arena: Arena): boolean {
   c.save();
   drawCastleWallDetails(c);
   if (upperGallery) drawCastleGalleryDecoration(c, upperGallery);
-  c.globalAlpha = .83;
-  if (art.duchess) c.drawImage(art.duchess, 289, groundY - 184, 67, 91);
-  if (art.king) c.drawImage(art.king, 924, groundY - 184, 71, 91);
   c.globalAlpha = .8;
   for (const x of CASTLE_SCONCE_X) c.drawImage(art.sconce, x - 12, groundY - 140, 24, 39);
   c.globalAlpha = .87;
