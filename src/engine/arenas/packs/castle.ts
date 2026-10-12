@@ -15,7 +15,7 @@ import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import { drawStorybookPlatform } from './castleStationPlatforms';
-import { drawCastleCartoonBackground, drawCastleCartoonForeground } from './castleCartoonProps';
+import { CASTLE_SCONCE_FLAME_Y, CASTLE_SCONCE_X, drawCastleCartoonBackground, drawCastleCartoonForeground } from './castleCartoonProps';
 import { drawCastleGuardianSpring } from './castleGuardianSpring';
 
 const RATS_CFG: GroundCritterConfig[] = [
@@ -24,9 +24,7 @@ const RATS_CFG: GroundCritterConfig[] = [
   { platL: 1060, platR: 1260, platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
 ];
 
-// Four sconces flank the action. The former center torch conflicted with the chandelier.
-const TORCH_X = [100, 400, 880, 1080] as const;
-const TORCH_FLAME_Y = 580;
+// Four sconces occupy clear wall bays, away from landing surfaces and the piers.
 
 /**
  * Cobweb in a body-front-face corner. (cornerX, cornerY) is the corner anchor;
@@ -493,36 +491,32 @@ export const castle: ArenaPack = {
     const ground = arena.platforms[0];
     const y = ground.y;
 
-    // Wall torches on background
+    // Fallback wall sconces when the illustrated art cannot load.
     const drawTorch = (tx: number, ty: number) => {
       // Bracket
       ctx.fillStyle = '#4A4A4A';
       ctx.fillRect(tx - 2, ty - 15, 4, 15);
       ctx.fillRect(tx - 6, ty - 18, 12, 5);
       // Flame
-      ctx.fillStyle = '#FF8800';
+      ctx.fillStyle = '#80c3e3';
       ctx.beginPath();
       ctx.moveTo(tx - 5, ty - 18);
       ctx.quadraticCurveTo(tx, ty - 35, tx + 5, ty - 18);
       ctx.fill();
-      ctx.fillStyle = '#FFCC00';
+      ctx.fillStyle = '#e1f3ff';
       ctx.beginPath();
       ctx.moveTo(tx - 3, ty - 19);
       ctx.quadraticCurveTo(tx, ty - 30, tx + 3, ty - 19);
       ctx.fill();
       // Glow
       const glow = ctx.createRadialGradient(tx, ty - 25, 2, tx, ty - 25, 40);
-      glow.addColorStop(0, 'rgba(255, 150, 50, 0.15)');
-      glow.addColorStop(1, 'rgba(255, 100, 20, 0)');
+      glow.addColorStop(0, 'rgba(112, 194, 225, 0.15)');
+      glow.addColorStop(1, 'rgba(112, 194, 225, 0)');
       ctx.fillStyle = glow;
       ctx.fillRect(tx - 40, ty - 65, 80, 80);
     };
 
-    drawTorch(100, y - 60);
-    drawTorch(400, y - 60);
-    drawTorch(640, y - 60);
-    drawTorch(880, y - 60);
-    drawTorch(1080, y - 60);
+    for (const x of CASTLE_SCONCE_X) drawTorch(x, y - 100);
 
     // Suits of armor on ground
     const drawArmor = (ax: number, ay: number, size: number) => {
@@ -809,15 +803,15 @@ export const castle: ArenaPack = {
 
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
-    // Embers only — torch halo comes from the L2 emitter pipeline (`lights`).
+    // Cool sconce motes; the halo comes from the L2 emitter pipeline (`lights`).
     ctx.save();
-    for (let i = 0; i < TORCH_X.length; i++) {
-      const tx = TORCH_X[i];
+    for (let i = 0; i < CASTLE_SCONCE_X.length; i++) {
+      const tx = CASTLE_SCONCE_X[i];
       const u = ((time * 0.3 + i * 0.31) % 1);
       ctx.globalAlpha = (1 - u) * 0.45;
       ctx.fillStyle = '#a4dcf0';
       ctx.beginPath();
-      ctx.arc(tx + fastSin(time * 1.5 + i) * 4, TORCH_FLAME_Y - 16 - u * 40, 1.1, 0, Math.PI * 2);
+      ctx.arc(tx + fastSin(time * 1.5 + i) * 4, CASTLE_SCONCE_FLAME_Y - 16 - u * 40, 1.1, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -880,14 +874,14 @@ export const castle: ArenaPack = {
 
   musicFile: 'castle.mp3',
 
-  // L2 emitters: restrained cool sconce light at the existing TORCH_X positions. Replaces
+  // L2 emitters: restrained cool light at the sconce positions. Replaces
   // the alpha-modulated halo in drawAnimatedBackground that gets crushed by
   // the fg-night-tint multiply at midnight; the EmitterPipeline writes to a
   // screen-blend DOM sibling that punches through.
-  lights: TORCH_X.map((tx, i) => ({
+  lights: CASTLE_SCONCE_X.map((tx, i) => ({
     kind: 'point' as const,
     x: tx,
-    y: TORCH_FLAME_Y,
+    y: CASTLE_SCONCE_FLAME_Y,
     color: { r: 151, g: 198, b: 228 },
     intensity: 0.72,
     radius: 110,

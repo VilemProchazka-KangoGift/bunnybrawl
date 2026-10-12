@@ -1,6 +1,6 @@
 # Castle cartoon props
 
-The [gallery and side-support layout pass](layout/README.md) moves the guards onto the long upper platform and places the former clipped edge columns under the lowest side ledges. It keeps the center spawn and movement lanes clear.
+The [Castle layout pass](layout/README.md) moves the guards onto the long upper platform, relocates the clipped columns to open floor bays, distributes four sconces across clear wall bays, and lowers the chandelier. It keeps the center spawn and movement lanes clear.
 
 The approved quieter Balanced Silver from the [Castle atmosphere gallery](atmosphere/README.md) is implemented in the playable arena. The [thorn silhouette gallery](thorns/README.md) remains an unselected study; production thorns are unchanged.
 

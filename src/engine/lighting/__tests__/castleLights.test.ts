@@ -11,7 +11,7 @@ describe('castle arena lights catalog', () => {
     const lights = getArenaLights('castle');
     expect(lights.length).toBe(4);
     const xs = lights.map(l => l.x).sort((a, b) => a - b);
-    expect(xs).toEqual([100, 400, 880, 1080]);
+    expect(xs).toEqual([90, 450, 830, 1190]);
   });
 
   it('all sconces share the cool-blue color and inverse-square falloff', () => {
@@ -20,7 +20,7 @@ describe('castle arena lights catalog', () => {
       expect(l.kind).toBe('point');
       expect(l.color).toEqual({ r: 151, g: 198, b: 228 });
       expect(l.falloff).toBe('inverse-square');
-      expect(l.y).toBe(580);
+      expect(l.y).toBe(540);
     }
   });
 

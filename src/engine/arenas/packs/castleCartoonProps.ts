@@ -3,6 +3,9 @@ import { getCastlePropArt } from '../illustratedBackdropAsset';
 
 type CastleArt = { guard: ImageBitmap; sconce: ImageBitmap; chandelier: ImageBitmap; column: ImageBitmap };
 
+export const CASTLE_SCONCE_X = [90, 450, 830, 1190] as const;
+export const CASTLE_SCONCE_FLAME_Y = 540;
+
 function loadedArt(): CastleArt | null {
   const art = getCastlePropArt();
   return art.guard && art.sconce && art.chandelier && art.column ? art as CastleArt : null;
@@ -23,16 +26,16 @@ export function drawCastleCartoonBackground(c: Ctx2D, arena: Arena): boolean {
   const upperGallery = arena.platforms.find(platform => platform.y < 300 && platform.width > 700);
   c.save();
   c.globalAlpha = .8;
-  for (const x of [100, 400, 880, 1080]) c.drawImage(art.sconce, x - 12, groundY - 99, 24, 39);
+  for (const x of CASTLE_SCONCE_X) c.drawImage(art.sconce, x - 12, groundY - 140, 24, 39);
   c.globalAlpha = .87;
   if (upperGallery) {
     // Gallery sentries mark the long upper landing without crowding its center spawn.
     c.drawImage(art.guard, upperGallery.x + 62, upperGallery.y - 72, 52, 72);
     mirror(c, art.guard, upperGallery.x + upperGallery.width - 114, upperGallery.y - 72, 52, 72);
   }
-  // The former clipped edge pillars now read as supports beneath the side ledges.
-  c.drawImage(art.column, 80, groundY - 80, 50, 80);
-  mirror(c, art.column, 1150, groundY - 80, 50, 80);
+  // Freestanding piers occupy floor bays clear of both side ledges and sconces.
+  c.drawImage(art.column, 184, groundY - 94, 54, 94);
+  mirror(c, art.column, 1042, groundY - 94, 54, 94);
   c.restore();
   return true;
 }
@@ -40,6 +43,15 @@ export function drawCastleCartoonBackground(c: Ctx2D, arena: Arena): boolean {
 export function drawCastleCartoonForeground(c: Ctx2D, _arena: Arena): boolean {
   const art = loadedArt();
   if (!art) return false;
-  c.drawImage(art.chandelier, 580, 486, 120, 69);
+  // Extend the chain to the middle shelf so the lowered fixture still hangs from it.
+  c.save();
+  c.strokeStyle = '#293446';
+  c.lineWidth = 4;
+  c.beginPath();
+  c.moveTo(640, 500);
+  c.lineTo(640, 515);
+  c.stroke();
+  c.restore();
+  c.drawImage(art.chandelier, 580, 511, 120, 69);
   return true;
 }
