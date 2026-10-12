@@ -33,7 +33,24 @@ function drawWaterfall(c,z,t,variant,top){
   g.addColorStop(0,'rgba(39,115,153,.65)');g.addColorStop(.25,'rgba(103,182,209,.62)');
   g.addColorStop(.6,'rgba(159,216,225,.7)');g.addColorStop(1,'rgba(50,130,172,.65)');
   c.fillStyle=g;c.fillRect(-8,0,w+16,h);
-  if(variant>=8){
+  if(variant>=12){
+    const wide=variant===13, sweep=variant===14, silver=variant===15;
+    const spacing=wide?125:83,count=wide?7:10;
+    for(let j=0;j<count;j++){
+      const yy=((t*210+j*spacing)%(h+130))-100;
+      const amplitude=sweep?35:17,depth=wide?64:40;
+      c.save();c.beginPath();c.moveTo(-10,yy);
+      for(let x=0;x<=w+10;x+=12)c.lineTo(x,yy+Math.sin(x*(sweep?.018:.04)+j)*amplitude);
+      for(let x=w+10;x>=-10;x-=12)c.lineTo(x,yy+depth+Math.sin(x*(sweep?.022:.035)+j+1)*(wide?30:22));
+      c.closePath();c.clip();
+      const shade=c.createLinearGradient(0,yy-amplitude,0,yy+depth+30);
+      shade.addColorStop(0,silver?'rgba(244,253,244,.6)':'rgba(213,243,232,.42)');
+      shade.addColorStop(.3,'rgba(126,205,219,.22)');shade.addColorStop(.68,'rgba(36,114,156,.2)');
+      shade.addColorStop(1,variant===12?'rgba(9,59,107,.48)':'rgba(22,88,131,.3)');
+      c.fillStyle=shade;c.fillRect(-10,yy-amplitude,w+20,depth+amplitude+35);c.restore();
+      if(silver){c.beginPath();for(let x=-10;x<=w+10;x+=12)c.lineTo(x,yy+Math.sin(x*.04+j)*17);c.strokeStyle='rgba(233,250,239,.48)';c.lineWidth=2.5;c.stroke();}
+    }
+  }else if(variant>=8){
     const count=variant===11?4:variant===8?5:7;
     for(let j=0;j<count;j++){
       const x=j*w/(count-1),wide=w/count*.7;
