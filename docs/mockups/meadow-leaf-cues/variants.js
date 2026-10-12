@@ -8,7 +8,11 @@ export function weatherAt(t){
 }
 export function drawCue(c,weather,variant,theme){
   for(const w of weather){
-    if(w.type!=='leaf'||variant===0){drawWeather(c,[w],theme);continue;}
+    if(w.type!=='leaf'){drawWeather(c,[w],theme);continue;}
+    if(variant===0){
+      c.save();c.fillStyle='rgba(90,160,60,.4)';c.beginPath();c.ellipse(w.x,w.y,w.size,w.size*.4,w.rotation,0,Math.PI*2);c.fill();
+      const dx=w.size*.7*Math.cos(w.rotation),dy=w.size*.7*Math.sin(w.rotation);c.strokeStyle='rgba(60,120,40,.3)';c.lineWidth=.5;c.beginPath();c.moveTo(w.x-dx,w.y-dy);c.lineTo(w.x+dx,w.y+dy);c.stroke();c.restore();continue;
+    }
     if(variant===3)continue;
     c.save();c.translate(w.x,w.y);c.rotate(w.rotation);c.globalAlpha=.55;
     const r=w.size;c.lineWidth=.65;c.strokeStyle='#486336';c.fillStyle='#89ab58';
