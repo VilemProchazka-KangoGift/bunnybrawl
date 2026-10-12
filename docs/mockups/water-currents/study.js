@@ -1,4 +1,5 @@
 import {Renderer} from '../../../src/engine/renderer.ts';
+import {preloadIllustratedBackdrop} from '../../../src/engine/arenas/illustratedBackdropAsset.ts';
 import {registerBuiltinArenas,getArena,getTheme} from '../../../src/engine/arenas/index.ts';
 import {registerBuiltinCharacters,getAllCharacterDefs} from '../../../src/engine/characters/index.ts';
 import {registerPlayablePlushRoster} from '../../../src/engine/characters/plush/playableRoster.ts';
@@ -7,6 +8,7 @@ import {drawCurrentZone} from '../../../src/engine/rendering/hazards/zones.ts';
 import {drawCurrentVariant} from './variants.js';
 registerBuiltinArenas();registerBuiltinCharacters();await registerPlayablePlushRoster();
 const $=id=>document.getElementById(id),arena=getArena(new URLSearchParams(location.search).get('arena')||'waterfall'),theme=getTheme(arena.id);
+await preloadIllustratedBackdrop(arena.id);
 const zones=arena.effectZones.filter(z=>z.type==='current'),defs=getAllCharacterDefs();const sceneArena={...arena,effectZones:arena.effectZones.filter(z=>z.type!=='current')};
 const surface=()=>Object.assign(document.createElement('canvas'),{width:1280,height:720});
 const state=makeState({arena,countdown:0,dayPhase:0,players:[makePlayer({x:520,y:430}),makePlayer({id:'P2',character:{...defs.find(d=>d.name==='Fox'),slot:'P2'},x:750,y:540})]});
