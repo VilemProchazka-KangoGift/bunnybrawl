@@ -59,4 +59,9 @@ export default defineConfig([
     files: ['docs/mockups/{carrot-pickup,ceiling-bonk,player-bump,wall-bonk}/{capture-live,verify}.mjs'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
+  {
+    // Castle art tools evaluate drawing callbacks in the page's browser context.
+    files: ['docs/mockups/castle-cartoon-props/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
 ])

@@ -5,7 +5,6 @@ export const GARGOYLE_VARIANTS = ['gargoyle-imp', 'gargoyle-bulldog', 'gargoyle-
 export type GargoyleVariant = typeof GARGOYLE_VARIANTS[number];
 
 const ink = '#263149';
-const gold = '#f3d681';
 const cream = '#f1e8d4';
 
 function fill(c: Ctx2D, color: string) { c.fillStyle = color; c.fill(); c.strokeStyle = ink; c.lineWidth = 1.7; c.lineJoin = 'round'; c.lineCap = 'round'; c.stroke(); }
