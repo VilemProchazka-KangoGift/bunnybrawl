@@ -11,3 +11,5 @@ Round 2 adds an exact combination of Foamy spout tongues and Bubble surge bubble
 Round 3 retains Broad rolling tongues + big bubbles and adds Shaded rolling tongues, Folded water ribbons, Broken wave crests and Layered flowing scales. All use the same 18 large bubbles at 90px/s; only the broad water surface changes.
 
 Round 4 uses Fine ribbons + quick bubbles as the base: seven narrow streams, 30 small bubbles at 155px/s. Fine shaded ribbons, Fine folded ribbons, Fine wave crests and Fine flowing scales vary the surface shading while preserving that base.
+
+Selected: Fine shaded ribbons. Production uses seven narrow shaded streams and 30 small irregular bubbles rising at 155px/s. Zone geometry, launch force and timers are unchanged.

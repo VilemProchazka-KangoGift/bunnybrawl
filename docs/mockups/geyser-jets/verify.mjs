@@ -23,6 +23,15 @@ await page.selectOption('#view', 'all');
 await page.setViewportSize({ width: 360, height: 800 });
 if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile overflow');
 await page.screenshot({ path: 'docs/mockups/geyser-jets/captures/mobile.png', fullPage: true });
+const parity=await page.evaluate(()=>{
+const {drawFineGeyser,drawVariant,zone}=window.__geyserStudy;
+for(const active of [true,false])for(const t of [0,.75,2.2,5.1]){
+const a=document.createElement('canvas'),b=document.createElement('canvas');a.width=b.width=1280;a.height=b.height=720;
+drawFineGeyser(a.getContext('2d'),zone,active,t);drawVariant(b.getContext('2d'),zone,active,t,12);
+const x=a.getContext('2d').getImageData(0,0,1280,720).data,y=b.getContext('2d').getImageData(0,0,1280,720).data;
+if(x.some((v,i)=>v!==y[i]))return false;
+}return true;
+});if(!parity)throw new Error('Production differs from selected sample');
 await browser.close();
 if (errors.length) throw new Error(errors.join('\n'));
 console.log('PASS: sixteen variants, active/dormant, focus views, timeline and mobile layout; no browser errors');

@@ -1,3 +1,4 @@
+import {drawFineGeyser} from '../../../src/engine/rendering/hazards/geyser.ts';
 import {Renderer} from '../../../src/engine/renderer.ts';
 import {registerBuiltinArenas,getArena,getTheme} from '../../../src/engine/arenas/index.ts';
 import {registerBuiltinCharacters,getAllCharacterDefs} from '../../../src/engine/characters/index.ts';
@@ -25,5 +26,5 @@ $('replay').onclick=()=>{time=0;playing=true;$('play').textContent='Pause';rende
 $('time').oninput=()=>{playing=false;$('play').textContent='Play';time=Number($('time').value);render();};
 $('state').onchange=render;
 $('view').onchange=()=>{document.querySelector('.panels').classList.toggle('focus',$('view').value!=='all');document.querySelectorAll('section').forEach((s,i)=>s.hidden=$('view').value!=='all'&&Number($('view').value)!==i);};
-$('status').textContent='Ready · production unchanged';window.__geyserStudy={render,zone};
+$('status').textContent='Ready · production unchanged';window.__geyserStudy={render,zone,drawFineGeyser,drawVariant};
 function tick(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number($('speed').value))%8;last=now;render();requestAnimationFrame(tick);}requestAnimationFrame(tick);

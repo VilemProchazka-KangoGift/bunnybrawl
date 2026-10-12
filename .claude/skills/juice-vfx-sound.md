@@ -293,3 +293,5 @@ Current lava rock uses a rotating jagged body, hot cracks and a circular orange 
 Selected Comet glow + ash puffs: four outlined grey irregular puffs spaced by current downward velocity and 65ms, plus an upward fixed-world flame silhouette at 0.3 alpha. Rotate only the original rock body/cracks. Draw in the existing lava-rock entity layer and skip inactive rocks; no particles or wire fields are needed. Pass simulation time from the entity render context for subtle puff rotation.
 
 Renderer-only worker bootstrap must register built-in entities before drawing. Hazard arrays and renderer diagnostic flags can be populated even when no entity draw functions are registered; the falling-rock Playwright regression counts actual ash fills in both worker modes.
+
+Geyser selection: Fine shaded ribbons, drawn by rendering/hazards/geyser.ts. Seven clipped shaded tongues and 30 irregular rimmed bubbles at 155px/s replace the faint rectangle and tiny bubble circles. Preserve actual effect-zone geometry and activation timers.
