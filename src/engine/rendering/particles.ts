@@ -1,3 +1,4 @@
+import { drawInkLeaf } from './leafEffects';
 import { drawBurnCough } from './burnEffects';
 import { drawRespawnEntrance } from './respawnEffects';
 import { drawThornJolt } from './thornEffects';
@@ -51,20 +52,7 @@ export function drawWeather(ctx: Ctx2D, weather: WeatherParticle[], theme: Theme
       ctx.arc(px, py, w.size * 0.5, 0, Math.PI * 2);
       ctx.fill();
     } else if (w.type === 'leaf') {
-      const rot = w.rotation + w.rotSpeed * lead;
-      ctx.fillStyle = 'rgba(90, 160, 60, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(px, py, w.size, w.size * 0.4, rot, 0, Math.PI * 2);
-      ctx.fill();
-      // Vein line: from (-size*0.7, 0) to (size*0.7, 0) in the rotated frame.
-      const dx = w.size * 0.7 * Math.cos(rot);
-      const dy = w.size * 0.7 * Math.sin(rot);
-      ctx.strokeStyle = 'rgba(60, 120, 40, 0.3)';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(px - dx, py - dy);
-      ctx.lineTo(px + dx, py + dy);
-      ctx.stroke();
+      drawInkLeaf(ctx, w, lead);
     } else if (w.type === 'petal') {
       ctx.fillStyle = 'rgba(255, 180, 200, 0.35)';
       ctx.beginPath();
