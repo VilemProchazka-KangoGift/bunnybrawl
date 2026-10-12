@@ -1,12 +1,14 @@
 # Castle cartoon props
 
-The [Castle layout pass](layout/README.md) moves the guards onto the long upper platform, relocates the clipped columns to open floor bays, distributes four sconces across clear wall bays, and lowers the chandelier. It keeps the center spawn and movement lanes clear.
+The latest [royal gallery pass](royal-gallery/README.md) removes the misleading freestanding columns and adds portraits, upper-platform cloth and relief, gargoyle keystones, and restrained wall wear. Windows are unchanged. See its matched full-scene before/after captures.
+
+The earlier [Castle layout pass](layout/README.md) moved the guards onto the long upper platform, relocated the clipped columns to open floor bays, distributed four sconces across clear wall bays, and lowered the chandelier. The later royal gallery pass removes those columns after they were found to imply false collision.
 
 The approved quieter Balanced Silver from the [Castle atmosphere gallery](atmosphere/README.md) is implemented in the playable arena. The [thorn silhouette gallery](thorns/README.md) remains an unselected study; production thorns are unchanged.
 
-The approved Moonlit props use simplified storybook silhouettes and broad light/shadow planes. The guard, sconce, chandelier, and edge column were traced to editable [SVG masters](svg/) and rendered as transparent WebP files for the game. A browser probe found that `createImageBitmap` could not decode the SVG Blob in Edge, while the WebP files loaded in both canvas-owning worker modes. Run `node docs/mockups/castle-cartoon-props/rasterize.mjs` with `CASTLE_PROPS_BROWSER` set to a local Chromium or Edge binary to regenerate the runtime files from the SVGs.
+The approved Moonlit props use simplified storybook silhouettes and broad light/shadow planes. The guard, sconce, chandelier, and now-retired edge column were traced to editable [SVG masters](svg/) and rendered as transparent WebP files for the game. A browser probe found that `createImageBitmap` could not decode the SVG Blob in Edge, while the WebP files loaded in both canvas-owning worker modes. Run `node docs/mockups/castle-cartoon-props/rasterize.mjs` with `CASTLE_PROPS_BROWSER` set to a local Chromium or Edge binary to regenerate the traced runtime files.
 
-The four WebP files total 40,972 bytes. The small sconce is inlined by Vite; the other three are fetched with the arena backdrop. All four must decode before the new prop set renders. A missing image falls back to the old complete Canvas scene. Guards and sconces sit behind players; the chandelier and edge columns are foreground. The five warm wall torches are replaced by four cool sconces, and sparse Moonlit banners retain their reactive sway. Gameplay geometry and hazard collision are unchanged.
+The original four traced WebP files total 40,972 bytes, including the retained column master. The small sconce is inlined by Vite. The guard, sconce and chandelier must decode before the illustrated prop set renders; a missing core image uses the Canvas fallback. The two new portraits load with Castle and render when available. Guards, sconces and portraits sit behind players; the chandelier is foreground. The five warm wall torches are replaced by four cool sconces, and sparse Moonlit banners retain their reactive sway. Gameplay geometry and hazard collision are unchanged.
 
 | Default simulation worker | `simWorker=off` |
 | --- | --- |

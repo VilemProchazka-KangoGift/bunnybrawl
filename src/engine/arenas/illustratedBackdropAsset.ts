@@ -80,14 +80,15 @@ const winterPropArt = {
   igloo: createBackdrop(new URL('./assets/winter-igloo.webp', import.meta.url).href),
 };
 
-// The SVG masters are kept in the castle prop study. Browser workers cannot
-// decode SVG Blobs with createImageBitmap, so runtime uses transparent WebP
-// renders of those traced paths at several times their displayed size.
+// The SVG masters for the traced props and painted sources for the portraits
+// are kept in the castle prop study. Browser workers cannot decode SVG Blobs
+// with createImageBitmap, so runtime uses transparent WebP art in both cases.
 const castlePropArt = {
   guard: createBackdrop(new URL('./assets/castle-guard-cartoon-balanced-silver.webp', import.meta.url).href),
   sconce: createBackdrop(new URL('./assets/castle-sconce-cartoon-balanced-silver.webp', import.meta.url).href),
   chandelier: createBackdrop(new URL('./assets/castle-chandelier-cartoon-balanced-silver.webp', import.meta.url).href),
-  column: createBackdrop(new URL('./assets/castle-column-cartoon-balanced-silver.webp', import.meta.url).href),
+  duchess: createBackdrop(new URL('./assets/castle-portrait-duchess.webp', import.meta.url).href),
+  king: createBackdrop(new URL('./assets/castle-portrait-king.webp', import.meta.url).href),
 };
 
 // The editable Guardian SVG poses live in the castle study. Both worker-local
@@ -101,10 +102,11 @@ export function getCastleGuardianArt(): { rest: ImageBitmap | null; compressed: 
   return { rest: castleGuardianArt.rest.get(), compressed: castleGuardianArt.compressed.get() };
 }
 
-export function getCastlePropArt(): { guard: ImageBitmap | null; sconce: ImageBitmap | null; chandelier: ImageBitmap | null; column: ImageBitmap | null } {
+export function getCastlePropArt(): { guard: ImageBitmap | null; sconce: ImageBitmap | null; chandelier: ImageBitmap | null; duchess: ImageBitmap | null; king: ImageBitmap | null } {
   return {
     guard: castlePropArt.guard.get(), sconce: castlePropArt.sconce.get(),
-    chandelier: castlePropArt.chandelier.get(), column: castlePropArt.column.get(),
+    chandelier: castlePropArt.chandelier.get(),
+    duchess: castlePropArt.duchess.get(), king: castlePropArt.king.get(),
   };
 }
 

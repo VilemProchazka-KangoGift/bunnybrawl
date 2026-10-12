@@ -1,5 +1,7 @@
 # Castle prop layout: clear wall and floor bays
 
+This is the historical layout comparison. The later [royal gallery pass](../royal-gallery/README.md) removes the two freestanding columns because their broad caps suggested playable collision.
+
 The long upper landing looked empty while the two armor guards crowded the ground. The edge columns were half-clipped and did not appear attached to the room. Moving the guards to the gallery improved that balance, but the first attempt to put the columns directly under the side ledges made them overlap the platform art. Its low sconces also crossed the ledges and the left column. The revised pass keeps the gallery guards and separates every floor and wall prop from the nearby platforms. Arena geometry, collision, and spawns are unchanged.
 
 | Previous Balanced Silver layout | First gallery pass | Revised clear bays |

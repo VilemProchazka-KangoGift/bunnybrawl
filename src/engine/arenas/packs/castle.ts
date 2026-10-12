@@ -563,47 +563,6 @@ export const castle: ArenaPack = {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
-    // Large foreground stone pillar — left side
-    ctx.save();
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = '#1A1A2E';
-    // Main pillar body
-    ctx.fillRect(-10, gy - 80, 55, 110);
-    // Pillar capital (wider top)
-    ctx.fillRect(-15, gy - 85, 65, 10);
-    // Pillar base (wider bottom)
-    ctx.fillRect(-15, gy + 20, 65, 10);
-    // Stone texture lines
-    ctx.globalAlpha = 0.15;
-    ctx.strokeStyle = '#3A3A5E';
-    ctx.lineWidth = 1;
-    for (let sy = gy - 75; sy < gy + 20; sy += 18) {
-      ctx.beginPath();
-      ctx.moveTo(-5, sy);
-      ctx.lineTo(40, sy);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Large foreground stone pillar — right side
-    ctx.save();
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = '#1A1A2E';
-    ctx.fillRect(1240, gy - 75, 50, 105);
-    ctx.fillRect(1235, gy - 80, 60, 10);
-    ctx.fillRect(1235, gy + 20, 60, 10);
-    // Stone texture lines
-    ctx.globalAlpha = 0.15;
-    ctx.strokeStyle = '#3A3A5E';
-    ctx.lineWidth = 1;
-    for (let sy = gy - 70; sy < gy + 20; sy += 18) {
-      ctx.beginPath();
-      ctx.moveTo(1245, sy);
-      ctx.lineTo(1285, sy);
-      ctx.stroke();
-    }
-    ctx.restore();
-
     // Large iron chandelier silhouette — center
     ctx.save();
     ctx.globalAlpha = 0.4;
