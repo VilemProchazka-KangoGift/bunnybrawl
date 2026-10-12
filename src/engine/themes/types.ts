@@ -75,6 +75,8 @@ export interface AmbientParticleConfig {
 }
 
 export interface DayNightConfig {
+  /** Hide sky bodies in enclosed scenes while retaining day/night lighting. */
+  showCelestialBodies?: boolean;
   enabled: boolean;
   cycleDuration: number;
   maxNightAlpha: number;

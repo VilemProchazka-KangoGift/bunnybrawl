@@ -2,7 +2,7 @@ import { drawFineGeyser } from './geyser';
 import type { ThemeConfig } from '../../themes/types';
 import type { Ctx2D } from '../../types';
 import { fastSin } from '../../fastMath';
-import { getSlowDevice } from '../../perfFlags';
+
 
 // Gradient caches keyed by the hz/zone object identity — arena objects are
 // stable for the match lifetime, so a WeakMap avoids per-frame string-key
@@ -17,22 +17,10 @@ type LavaGradients = {
   haloW: number;
   haloH: number;
 };
-// Vertical waterfall current: water body baked to a 1×N image strip; full-width
-// fill of a custom wavy path uses clip + stretched drawImage instead of a
-// per-pixel CanvasGradient (which was costing ~5ms/frame on a full-canvas fill).
-type CurrentImages = {
-  waterStrip: OffscreenCanvas | HTMLCanvasElement;
-  // Horizontal highlight gradient baked to a 60×1 strip (varies in X only,
-  // stretched in Y at draw via drawImage + imageSmoothingEnabled=false). Skips
-  // the per-pixel CanvasGradient evaluation over ~36k pixels/frame.
-  highlightStrip: OffscreenCanvas | HTMLCanvasElement;
-  height: number;
-};
 const cachedLavaGradients = new WeakMap<object, LavaGradients>();
 // Zero-G bg: per-zone strip (gradient varies by Y only). Stretched via drawImage
 // instead of full-area gradient fillRect — saves ~1-3ms on a 780×480 zone.
 const cachedZeroGBgStrips = new WeakMap<object, OffscreenCanvas | HTMLCanvasElement>();
-const cachedCurrentImages = new WeakMap<object, CurrentImages>();
 const cachedJellyGradients = new WeakMap<object, CanvasGradient>();
 
 // Hoisted dash patterns — setLineDash takes a fresh array otherwise.
@@ -215,6 +203,8 @@ export function drawZeroGZone(
   ctx.restore();
 }
 
+const currentWaterGradients = new WeakMap<Ctx2D, WeakMap<object, CanvasGradient>>();
+
 export function drawCurrentZone(
   ctx: Ctx2D,
   zone: { x: number; y: number; width: number; height: number; vx?: number; vy?: number },
@@ -225,138 +215,28 @@ export function drawCurrentZone(
 
   // Vertical waterfall current
   if (zone.vy && Math.abs(zone.vy) > Math.abs(zone.vx || 0)) {
-    // A visual source may sit above the force zone without extending physics.
-    const zx = zone.x, zy = visualTop ?? zone.y, zw = zone.width;
-    const zh = zone.y + zone.height - zy;
-    const cx = zx + zw / 2;
-
-    // Water body baked to a 1×height strip image (cached by zone identity).
-    // Stretched via drawImage inside a clipped wavy-edge path — avoids the
-    // per-pixel CanvasGradient lookup over a 200k+ pixel area.
-    let cachedImages = cachedCurrentImages.get(zone as object);
-    if (!cachedImages || cachedImages.height !== zh) {
-      const useOffscreen = typeof OffscreenCanvas !== 'undefined';
-      const strip = useOffscreen
-        ? new OffscreenCanvas(1, zh)
-        : (() => { const c = document.createElement('canvas'); c.width = 1; c.height = zh; return c; })();
-      const sctx = strip.getContext('2d')! as Ctx2D;
-      const water = sctx.createLinearGradient(0, 0, 0, zh);
-      water.addColorStop(0, 'rgba(140, 200, 240, 0.45)');
-      water.addColorStop(0.3, 'rgba(100, 180, 230, 0.4)');
-      water.addColorStop(1, 'rgba(70, 150, 210, 0.35)');
-      sctx.fillStyle = water;
-      sctx.fillRect(0, 0, 1, zh);
-      // Highlight gradient varies in X only (60px wide). Bake to a 60×1 strip
-      // — drawImage stretches vertically at no per-pixel cost (memcpy + blend).
-      const HIGHLIGHT_W = 60;
-      const highlightStrip = useOffscreen
-        ? new OffscreenCanvas(HIGHLIGHT_W, 1)
-        : (() => { const c = document.createElement('canvas'); c.width = HIGHLIGHT_W; c.height = 1; return c; })();
-      const hlctx = highlightStrip.getContext('2d')! as Ctx2D;
-      const highlight = hlctx.createLinearGradient(0, 0, HIGHLIGHT_W, 0);
-      highlight.addColorStop(0, 'rgba(255,255,255,0)');
-      highlight.addColorStop(0.5, 'rgba(255,255,255,1)');
-      highlight.addColorStop(1, 'rgba(255,255,255,0)');
-      hlctx.fillStyle = highlight;
-      hlctx.fillRect(0, 0, HIGHLIGHT_W, 1);
-      cachedImages = { waterStrip: strip, highlightStrip, height: zh };
-      cachedCurrentImages.set(zone as object, cachedImages);
+    const zx=zone.x, zy=visualTop??zone.y, zw=zone.width, zh=zone.y+zone.height-zy;
+    ctx.translate(zx,zy);
+    ctx.beginPath();ctx.moveTo(0,0);
+    for(let k=0;k<=zh;k+=12)ctx.lineTo(Math.sin(k*.025-time*2)*5,k);
+    ctx.lineTo(zw,zh);
+    for(let k=zh;k>=0;k-=12)ctx.lineTo(zw+Math.sin(k*.03-time*2+2)*5,k);
+    ctx.closePath();ctx.clip();
+    let byZone=currentWaterGradients.get(ctx);if(!byZone){byZone=new WeakMap();currentWaterGradients.set(ctx,byZone);}
+    let water=byZone.get(zone);if(!water){water=ctx.createLinearGradient(0,0,zw,0);
+    water.addColorStop(0,'rgba(39,115,153,.65)');water.addColorStop(.25,'rgba(103,182,209,.62)');
+    water.addColorStop(.6,'rgba(159,216,225,.7)');water.addColorStop(1,'rgba(50,130,172,.65)');byZone.set(zone,water);}
+    ctx.fillStyle=water;ctx.fillRect(-8,0,zw+16,zh);
+    for(let j=0;j<10;j++){
+      const yy=((time*210+j*83)%(zh+100))-80;
+      ctx.beginPath();ctx.moveTo(-10,yy);
+      for(let x=0;x<=zw+10;x+=15)ctx.lineTo(x,yy+Math.sin(x*.04+j)*17);
+      for(let x=zw+10;x>=-10;x-=15)ctx.lineTo(x,yy+40+Math.sin(x*.035+j+1)*22);
+      ctx.closePath();ctx.fillStyle=j%2?'rgba(211,242,234,.22)':'rgba(36,111,152,.23)';ctx.fill();
     }
-    // Wavy edge path → clip → drawImage of strip stretched to width.
-    ctx.globalAlpha = 1;
-    ctx.beginPath();
-    {
-      const ex = zx + zw;
-      const dir = 1;
-      ctx.moveTo(ex + dir * 12, zy);
-      ctx.lineTo(Math.sin(zy * 0.03 + time * 2.5) * 5 * dir * 0.5
-        + Math.sin(zy * 0.07 + time * 1.8) * 3 * dir * 0.5 + ex, zy);
-      for (let ey = zy + 8; ey <= zy + zh; ey += 8) {
-        const wave = Math.sin(ey * 0.03 + time * 2.5) * 5 + Math.sin(ey * 0.07 + time * 1.8) * 3;
-        ctx.lineTo(ex + wave * dir * 0.5, ey);
-      }
-      ctx.lineTo(ex + dir * 12, zy + zh);
-    }
-    {
-      const ex = zx;
-      const dir = -1;
-      ctx.lineTo(ex + dir * 12, zy + zh);
-      for (let ey = zy + zh; ey >= zy; ey -= 8) {
-        const wave = Math.sin(ey * 0.03 + time * 2.5) * 5 + Math.sin(ey * 0.07 + time * 1.8) * 3;
-        ctx.lineTo(ex + wave * dir * 0.5, ey);
-      }
-      ctx.lineTo(ex + dir * 12, zy);
-    }
-    ctx.closePath();
-    ctx.save();
-    ctx.clip();
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(cachedImages.waterStrip, zx - 12, zy, zw + 24, zh);
-    ctx.restore();
-
-    const speed = Math.abs(zone.vy) * 0.3;
-    // Slow-device skips animated layers; keeps body + center highlight.
-    if (getSlowDevice()) {
-      ctx.globalAlpha = 0.12;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(cachedImages.highlightStrip, cx - 30, zy, 60, zh);
-      ctx.restore();
-      return;
-    }
-
-    // Flowing water columns -- wide semi-transparent bands moving downward
-    const colCount = 5;
-    ctx.fillStyle = '#D0EAFF';
-    for (let i = 0; i < colCount; i++) {
-      const colW = 20 + (i % 3) * 12;
-      const baseX = zx + 30 + (i * (zw - 60)) / colCount + Math.sin(time * 1.2 + i * 1.7) * 10;
-      const colLen = 80 + (i % 3) * 40;
-      const colY = zy + ((time * speed + i * 97) % (zh + colLen)) - colLen;
-      const y1 = Math.max(colY, zy);
-      const y2 = Math.min(colY + colLen, zy + zh);
-      if (y1 >= y2) continue;
-      ctx.globalAlpha = 0.15 + 0.05 * Math.sin(time * 1.5 + i);
-      ctx.beginPath();
-      ctx.ellipse(baseX, (y1 + y2) / 2, colW / 2, (y2 - y1) / 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // White foam streaks -- thin fast lines for motion feel
-    const streakCount = Math.max(14, Math.round(zw / 20));
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#FFFFFF';
-    for (let i = 0; i < streakCount; i++) {
-      const sx = zx + 8 + ((i * 29 + Math.sin(i * 3.1) * 15) % (zw - 16));
-      const streakLen = 40 + (i % 5) * 15;
-      const sy = zy + ((time * speed * 1.2 + i * 37) % (zh + streakLen)) - streakLen;
-      const y1 = Math.max(sy, zy);
-      const y2 = Math.min(sy + streakLen, zy + zh);
-      if (y1 >= y2) continue;
-      ctx.globalAlpha = 0.25 + 0.1 * Math.sin(time * 2 + i * 0.8);
-      ctx.beginPath();
-      ctx.moveTo(sx, y1);
-      ctx.lineTo(sx + Math.sin(time * 0.8 + i) * 4, y2);
-      ctx.stroke();
-    }
-
-    // Splash/foam at the bottom of the waterfall
-    const foamY = zy + zh;
-    ctx.fillStyle = '#E8F4FF';
-    for (let i = 0; i < 18; i++) {
-      const fx = zx + 10 + (i / 18) * (zw - 20) + Math.sin(time * 3 + i * 1.3) * 8;
-      const fy = foamY - 4 - Math.abs(Math.sin(time * 2.2 + i * 0.7)) * 18;
-      const fr = 5 + Math.sin(time * 1.8 + i * 1.1) * 3;
-      ctx.globalAlpha = 0.35 + 0.15 * Math.sin(time * 1.5 + i);
-      ctx.beginPath();
-      ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Bright highlight down the center
-    ctx.globalAlpha = 0.12;
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(cachedImages.highlightStrip, cx - 30, zy, 60, zh);
-
+    ctx.beginPath();ctx.moveTo(-6,zh+4);
+    for(let x=-6;x<=zw+6;x+=6)ctx.lineTo(x,zh-10-Math.abs(Math.sin(x*.055+time*5))*14-Math.sin(x*.13+time*3)*5);
+    ctx.lineTo(zw+6,zh+7);ctx.closePath();ctx.fillStyle='rgba(218,245,236,.65)';ctx.fill();
     ctx.restore();
     return;
   }

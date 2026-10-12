@@ -295,3 +295,5 @@ Selected Comet glow + ash puffs: four outlined grey irregular puffs spaced by cu
 Renderer-only worker bootstrap must register built-in entities before drawing. Hazard arrays and renderer diagnostic flags can be populated even when no entity draw functions are registered; the falling-rock Playwright regression counts actual ash fills in both worker modes.
 
 Geyser selection: Fine shaded ribbons, drawn by rendering/hazards/geyser.ts. Seven clipped shaded tongues and 30 irregular rimmed bubbles at 155px/s replace the faint rectangle and tiny bubble circles. Preserve actual effect-zone geometry and activation timers.
+
+Waterfall selection: Rolling water folds is a connected 400px curtain with alternating translucent wave bands moving down at 210px/s and froth at its foot. Start its visible water at the force-zone y=160 below the three upper stepping platforms. Waterfall hides celestial bodies via dayNight.showCelestialBodies=false while preserving its lighting cycle; cloud count is zero. Load painted backdrop before gallery background rendering.
