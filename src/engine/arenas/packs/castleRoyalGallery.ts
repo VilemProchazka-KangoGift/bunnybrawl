@@ -1,53 +1,27 @@
 import type { Ctx2D, Platform } from '../../types';
 
-function drawKeystoneFace(c: Ctx2D, x: number, y: number, sleepy: boolean): void {
+function drawGargoyleKeystone(c: Ctx2D, x: number, y: number, gargoyle: ImageBitmap, mirror: boolean): void {
   c.save();
   c.translate(x, y);
-  c.globalAlpha = .68;
+  if (mirror) c.scale(-1, 1);
   c.lineJoin = 'round';
-  c.lineCap = 'round';
-  c.fillStyle = '#77899a';
-  c.strokeStyle = '#34475a';
+  // The pointed stone wedge joins the arch. The spring's existing winged
+  // gargoyle art is cropped above its plinth and reads as a carved figure.
+  c.globalAlpha = .58;
+  c.fillStyle = '#74889a';
+  c.strokeStyle = '#465c70';
   c.lineWidth = 2;
   c.beginPath();
-  c.moveTo(-17, 3);
-  c.quadraticCurveTo(-19, -6, -11, -7);
-  c.lineTo(-15, -13);
-  c.quadraticCurveTo(-6, -11, -4, -17);
-  c.quadraticCurveTo(0, -20, 4, -17);
-  c.quadraticCurveTo(6, -11, 15, -13);
-  c.lineTo(11, -7);
-  c.quadraticCurveTo(19, -6, 17, 3);
-  c.quadraticCurveTo(12, 11, 0, 13);
-  c.quadraticCurveTo(-12, 11, -17, 3);
+  c.moveTo(-23, 10);
+  c.quadraticCurveTo(0, 4, 23, 10);
+  c.lineTo(13, 23);
+  c.lineTo(0, 33);
+  c.lineTo(-13, 23);
   c.closePath();
   c.fill();
   c.stroke();
-  c.fillStyle = '#a7b1ba';
-  c.beginPath();
-  c.ellipse(-4, -7, 9, 4, -.2, 0, Math.PI * 2);
-  c.fill();
-  c.strokeStyle = '#293b4c';
-  c.lineWidth = 2.4;
-  c.beginPath();
-  c.moveTo(-11, -1);
-  c.lineTo(-4, sleepy ? 1 : -3);
-  c.moveTo(4, sleepy ? 1 : -3);
-  c.lineTo(11, -1);
-  c.stroke();
-  c.fillStyle = '#42566a';
-  c.beginPath();
-  c.moveTo(0, 1);
-  c.lineTo(-3, 5);
-  c.lineTo(3, 5);
-  c.closePath();
-  c.fill();
-  c.strokeStyle = '#435365';
-  c.lineWidth = 1.4;
-  c.beginPath();
-  c.moveTo(-6, 8);
-  c.quadraticCurveTo(0, sleepy ? 10 : 6, 6, 8);
-  c.stroke();
+  c.globalAlpha = .72;
+  c.drawImage(gargoyle, 0, 0, gargoyle.width, gargoyle.height * .86, -30, -24, 60, 47);
   c.restore();
 }
 
@@ -107,10 +81,12 @@ function drawWornPlaster(c: Ctx2D, x: number, y: number, mirror: boolean): void 
   c.restore();
 }
 
-export function drawCastleWallDetails(c: Ctx2D): void {
-  // Flat wall art only: no landing cap, grounded base, or interactive silhouette.
-  drawKeystoneFace(c, 376, 114, true);
-  drawKeystoneFace(c, 850, 120, false);
+export function drawCastleWallDetails(c: Ctx2D, gargoyle: ImageBitmap | null): void {
+  // Inset wall details only: the small gargoyles perch on existing arch points.
+  if (gargoyle) {
+    drawGargoyleKeystone(c, 376, 114, gargoyle, false);
+    drawGargoyleKeystone(c, 850, 120, gargoyle, true);
+  }
   drawCobweb(c, 18, 228, 1);
   drawCobweb(c, 1262, 221, -1);
   drawWornPlaster(c, 262, 366, false);
