@@ -5,7 +5,7 @@ const urls = {
   treetops: new URL('./assets/treetops-painted.webp', import.meta.url).href,
   waterfall: new URL('./assets/waterfall-painted.webp', import.meta.url).href,
   volcano: new URL('./assets/volcano-painted.webp', import.meta.url).href,
-  castle: new URL('./assets/castle-painted.webp', import.meta.url).href,
+  castle: new URL('./assets/castle-painted-balanced-silver.webp', import.meta.url).href,
   haunted_graveyard: new URL('./assets/haunted-graveyard-painted.webp', import.meta.url).href,
   candy_land: new URL('./assets/candy-land-painted.webp', import.meta.url).href,
   underwater: new URL('./assets/underwater-painted.webp', import.meta.url).href,
@@ -80,6 +80,33 @@ const winterPropArt = {
   igloo: createBackdrop(new URL('./assets/winter-igloo.webp', import.meta.url).href),
 };
 
+// The SVG masters for the traced props are kept in the castle prop study.
+// Browser workers cannot decode SVG Blobs with createImageBitmap, so runtime
+// uses transparent WebP renders of those paths.
+const castlePropArt = {
+  guard: createBackdrop(new URL('./assets/castle-guard-cartoon-balanced-silver.webp', import.meta.url).href),
+  sconce: createBackdrop(new URL('./assets/castle-sconce-cartoon-balanced-silver.webp', import.meta.url).href),
+  chandelier: createBackdrop(new URL('./assets/castle-chandelier-cartoon-balanced-silver.webp', import.meta.url).href),
+};
+
+// The editable Guardian SVG poses live in the castle study. Both worker-local
+// bitmaps must be ready before the spring skin replaces its Canvas fallback.
+const castleGuardianArt = {
+  rest: createBackdrop(new URL('./assets/castle-guardian-rest-balanced-silver.webp', import.meta.url).href),
+  compressed: createBackdrop(new URL('./assets/castle-guardian-compressed-balanced-silver.webp', import.meta.url).href),
+};
+
+export function getCastleGuardianArt(): { rest: ImageBitmap | null; compressed: ImageBitmap | null } {
+  return { rest: castleGuardianArt.rest.get(), compressed: castleGuardianArt.compressed.get() };
+}
+
+export function getCastlePropArt(): { guard: ImageBitmap | null; sconce: ImageBitmap | null; chandelier: ImageBitmap | null } {
+  return {
+    guard: castlePropArt.guard.get(), sconce: castlePropArt.sconce.get(),
+    chandelier: castlePropArt.chandelier.get(),
+  };
+}
+
 export function getWinterPropArt(): { leafy: ImageBitmap | null; hedge: ImageBitmap | null; igloo: ImageBitmap | null } {
   return {
     leafy: winterPropArt.leafy.get(),
@@ -114,6 +141,9 @@ export function hasIllustratedBackdrop(arenaId: string): arenaId is IllustratedA
 
 export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSignal): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId === 'castle') {
+    return Promise.all([backdrops.castle.prefetch(signal), ...Object.values(castlePropArt).map(asset => asset.prefetch(signal)), ...Object.values(castleGuardianArt).map(asset => asset.prefetch(signal))]).then(() => {});
+  }
   if (arenaId === 'winter_lake') {
     return Promise.all([backdrops[arenaId].prefetch(signal), ...Object.values(winterPropArt).map(asset => asset.prefetch(signal))]).then(() => {});
   }
@@ -122,6 +152,9 @@ export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSigna
 
 export function preloadIllustratedBackdrop(arenaId: string): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId === 'castle') {
+    return Promise.all([backdrops.castle.preload(), ...Object.values(castlePropArt).map(asset => asset.preload()), ...Object.values(castleGuardianArt).map(asset => asset.preload())]).then(() => {});
+  }
   if (arenaId === 'winter_lake') {
     return Promise.all([backdrops[arenaId].preload(), ...Object.values(winterPropArt).map(asset => asset.preload())]).then(() => {});
   }

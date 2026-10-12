@@ -1,19 +1,22 @@
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../../constants';
+import { fastSin } from '../../fastMath';
+import {
+  composeBend,
+  createReactiveInstance,
+  registerReactiveKind,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
+import { getSlowDevice } from '../../perfFlags';
+import { BODY_SEED_OFFSET, CAP_DEPTH, applyIsoInsets, capFrontY, createSpringRenderer, createThornRenderer, drawRat, mulberry32, seedFor } from '../../themes/drawPrimitives';
+import { getFloatingPlatforms, type GroundCritterConfig } from '../../themes/utils';
+import type { Arena, Ctx2D, Platform, WeatherParticle } from '../../types';
 import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
-import type { Arena, Platform, WeatherParticle, Ctx2D } from '../../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { fastSin } from '../../fastMath';
-import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, type GroundCritterConfig } from '../../themes/utils';
-import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
-import { drawRat } from '../../themes/drawPrimitives';
-import {
-  registerReactiveKind,
-  createReactiveInstance,
-  composeBend,
-  type ReactiveInstance,
-} from '../../gameLoop/cosmetics/reactiveDecorations';
+import { drawStorybookPlatform } from './castleStationPlatforms';
+import { CASTLE_SCONCE_FLAME_Y, CASTLE_SCONCE_X, drawCastleCartoonBackground, drawCastleCartoonForeground } from './castleCartoonProps';
+import { drawCastleGuardianSpring } from './castleGuardianSpring';
 
 const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
@@ -21,17 +24,7 @@ const RATS_CFG: GroundCritterConfig[] = [
   { platL: 1060, platR: 1260, platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
 ];
 
-// x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
-const TORCH_X = [100, 400, 640, 880, 1080] as const;
-const TORCH_FLAME_Y = 580;
-const BANNER_COLORS = ['#8B0000', '#00008B', '#006400', '#4B0082'] as const;
-import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import {
-  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
-  capFrontY, capBackY, skewPx,
-  drawPlatformRightFace, drawPlatformCap,
-  subtleDown, backIso, leftIso,
-} from '../../themes/drawPrimitives';
+// Four sconces occupy clear wall bays, away from landing surfaces and the piers.
 
 /**
  * Cobweb in a body-front-face corner. (cornerX, cornerY) is the corner anchor;
@@ -97,120 +90,14 @@ function drawCastleCobweb(
 
 // Bg pass: cap + right face. These always sit BEHIND the player.
 function drawCastlePlatformBg(ctx: Ctx2D, platform: Platform): void {
-  const rng = mulberry32(seedFor(platform.x, platform.y));
-  const cF = capFrontY(platform);
-  const cB = capBackY(platform);
-  const sp = skewPx();
-  const brickW = 40;
-
-  // Right face — dark stone shadow
-  drawPlatformRightFace(ctx, platform, '#2a2a2a');
-
-  // Edge profiles — subtle inward chip notches on front; iso parallelogram cap
-  // (back shifted right + left edge sloped) for the architectural feel.
-  const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 2, amp: 1.2 });
-  const backPts = backIso(platform.x, platform.width, cB, sp);
-  const leftPts = leftIso(cB, cF, platform.x, sp);
-
-  // Cap — weathered stone with worn speckles + brick-direction mortar
-  drawPlatformCap(ctx, platform, frontPts, backPts, {
-    capColor: '#8a8a8a',
-    capLight: 'rgba(255,255,255,0.12)',
-    drawCapTexture: (ctx2, capFront, capBack, skew) => {
-      // Worn darker speckles
-      ctx2.fillStyle = 'rgba(60,60,60,0.4)';
-      const speckleCount = 8 + Math.floor(rng() * 6);
-      for (let i = 0; i < speckleCount; i++) {
-        const t = rng();
-        const sx = platform.x + skew * (1 - t) + t * platform.width + (rng() - 0.5) * 4;
-        const sy = capBack + rng() * (capFront - capBack);
-        const sr = 0.4 + rng() * 0.7;
-        ctx2.beginPath();
-        ctx2.arc(sx, sy, sr, 0, Math.PI * 2);
-        ctx2.fill();
-      }
-
-      // Brick-direction mortar visible on top — two horizontal lines at 30% / 70% of cap depth
-      ctx2.fillStyle = 'rgba(42,42,42,0.55)';
-      const capDepthY = capFront - capBack;
-      for (const frac of [0.3, 0.7]) {
-        const ly = capBack + capDepthY * frac;
-        const lx0 = platform.x + skew * (1 - frac);
-        const lx1 = lx0 + platform.width;
-        ctx2.fillRect(lx0, ly, lx1 - lx0, 1);
-      }
-
-      // Vertical ticks matching body's pattern — staggered per row
-      let r = 0;
-      for (const frac of [0.3, 0.7]) {
-        const ly = capBack + capDepthY * frac;
-        const offset = (r % 2 === 1) ? brickW * 0.5 : 0;
-        const lx0 = platform.x + skew * (1 - frac);
-        for (let tx = lx0 + offset; tx <= lx0 + platform.width; tx += brickW) {
-          ctx2.fillRect(tx, ly - capDepthY * 0.2, 1, capDepthY * 0.4);
-        }
-        r++;
-      }
-    },
-  }, leftPts);
+  drawStorybookPlatform(ctx, platform, 'limestone');
 }
 
 // Fg pass: body face. Drawn AFTER players so the body occludes any player
 // whose bbox overlaps the body region — gives the iso phantom strip (between
 // plat.x and plat.x + leftCollisionInset) a "going behind" feel.
 function drawCastlePlatformFg(ctx: Ctx2D, platform: Platform, _isGround: boolean): void {
-  // Independent seed (offset from bg) so bg and fg rng streams don't interfere.
-  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
-  const cF = capFrontY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
-
-  // Body front face — gray stone gradient (light top → dark bottom)
-  const bodyGrad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
-  bodyGrad.addColorStop(0, '#7a7a7a');
-  bodyGrad.addColorStop(1, '#3a3a3a');
-  ctx.fillStyle = bodyGrad;
-  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
-
-  // Brick mortar pattern — staggered courses
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(platform.x, bodyTop, platform.width, bodyH);
-  ctx.clip();
-
-  const brickH = 12;
-  const brickW = 40;
-  ctx.fillStyle = 'rgba(42,42,42,0.5)';
-
-  // Horizontal mortar lines every ~12px
-  for (let by = bodyTop + brickH; by < bodyTop + bodyH; by += brickH) {
-    ctx.fillRect(platform.x, by, platform.width, 1);
-  }
-
-  // Vertical mortar ticks — staggered. Odd rows offset by half-brick.
-  let row = 0;
-  for (let by = bodyTop; by < bodyTop + bodyH; by += brickH) {
-    const offset = (row % 2 === 1) ? brickW * 0.5 : 0;
-    for (let bx = platform.x + offset; bx <= platform.x + platform.width; bx += brickW) {
-      ctx.fillRect(bx, by, 1, brickH);
-    }
-    row++;
-  }
-
-  // Weathering blotches — 3-4 darker ellipses
-  const blotchCount = 3 + Math.floor(rng() * 2);
-  ctx.fillStyle = 'rgba(40,40,40,0.3)';
-  for (let i = 0; i < blotchCount; i++) {
-    const bx = platform.x + rng() * platform.width;
-    const by = bodyTop + rng() * bodyH;
-    const brx = 4 + rng() * 6;
-    const bry = 2 + rng() * 4;
-    ctx.beginPath();
-    ctx.ellipse(bx, by, brx, bry, rng() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
+  drawStorybookPlatform(ctx, platform, 'limestone', true);
 }
 
 /**
@@ -296,44 +183,49 @@ function castleBanner(x: number, y: number, colorIdx: number): ReactiveInstance 
 registerReactiveKind('castle.banner', {
   layer: 'postPlayer',
   draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
-    const data = inst.data as BannerData;
     const excite = inst.excitement;
 
     const bx = inst.pos.x;
     const by = inst.pos.y;
     const i = inst.seed;
-    const color = BANNER_COLORS[data.colorIdx % BANNER_COLORS.length];
-
     const baseSway = fastSin(time * 1.5 + i * 1.8) * 6;
     const reactSway = fastSin(time * (1.5 + excite * 4) + i * 1.8) * excite * 5;
     const sway = baseSway + reactSway;
-    const h = 35;
-
+    const wide = 14;
+    const drop = 35;
     ctx.save();
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = '#8A8A6A';
-    ctx.fillRect(bx - 14, by - 2, 28, 3);
-    ctx.fillStyle = color;
+    ctx.translate(bx, by);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#d6d9cd';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(-wide, 0); ctx.lineTo(wide, 0); ctx.stroke();
+    ctx.fillStyle = '#d7bb76';
+    for (const x of [-wide, wide]) {
+      ctx.beginPath(); ctx.ellipse(x, 0, 2, 2, 0, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.beginPath();
-    ctx.moveTo(bx - 12, by);
-    ctx.lineTo(bx + 12, by);
-    ctx.quadraticCurveTo(bx + 10 + sway * 0.5, by + h * 0.5, bx + 8 + sway, by + h);
-    ctx.lineTo(bx + sway, by + h + 12);
-    ctx.lineTo(bx - 8 + sway, by + h);
-    ctx.quadraticCurveTo(bx - 10 + sway * 0.5, by + h * 0.5, bx - 12, by);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    const ex = bx + sway * 0.3;
+    ctx.moveTo(-wide + 2, 1); ctx.lineTo(wide - 2, 1);
+    ctx.quadraticCurveTo(wide + 2 + sway * .15, 18, wide - 3 + sway, drop);
+    ctx.lineTo(sway, drop + 5); ctx.lineTo(-wide + 3 + sway, drop);
+    ctx.quadraticCurveTo(-wide - 2 + sway * .15, 18, -wide + 2, 1);
+    ctx.closePath(); ctx.fillStyle = '#574e85'; ctx.fill();
+    ctx.strokeStyle = '#24273c'; ctx.lineWidth = 1.7; ctx.stroke();
+    ctx.globalAlpha = .5;
+    ctx.fillStyle = '#8581ab';
     ctx.beginPath();
-    ctx.moveTo(ex, by + 8);
-    ctx.lineTo(ex + 6, by + 13);
-    ctx.lineTo(ex + 6, by + 22);
-    ctx.lineTo(ex, by + 27);
-    ctx.lineTo(ex - 6, by + 22);
-    ctx.lineTo(ex - 6, by + 13);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(-wide + 4, 4); ctx.lineTo(sway * .2, 5);
+    ctx.lineTo(-2 + sway * .7, drop - 4); ctx.lineTo(-wide + 3 + sway, drop - 5);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#d7bb76';
+    ctx.beginPath(); ctx.ellipse(sway * .25, 18, 5, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#574e85';
+    ctx.beginPath(); ctx.ellipse(2 + sway * .25, 16, 4.5, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d7bb76';
+    for (const x of [-4, 4]) {
+      ctx.beginPath(); ctx.ellipse(x + sway * .7, 28, 1.3, 1.3, 0, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.restore();
   },
 });
@@ -413,7 +305,7 @@ export const castle: ArenaPack = {
   weather: {
     particleCount: 15,
     types: [
-      { type: 'ember', weight: 1, sizeRange: [1, 3], vxRange: [-5, 5], vyRange: [-15, -35], rotSpeedRange: [0, 1], color: '#FF8844' },
+      { type: 'ember', weight: 1, sizeRange: [1, 3], vxRange: [-5, 5], vyRange: [-15, -35], rotSpeedRange: [0, 1], color: '#b3d9e7' },
     ],
   },
 
@@ -441,7 +333,7 @@ export const castle: ArenaPack = {
     vxRange: [-2, 2],
     vyRange: [-5, -15],
     alphaRange: [0.15, 0.4],
-    colors: ['#FFAA44', '#FF8833'],
+    colors: ['#a4dcf0', '#cadfe8'],
   },
 
   dayNight: {
@@ -595,39 +487,36 @@ export const castle: ArenaPack = {
   },
 
   drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => {
+    if (drawCastleCartoonBackground(ctx, arena)) return;
     const ground = arena.platforms[0];
     const y = ground.y;
 
-    // Wall torches on background
+    // Fallback wall sconces when the illustrated art cannot load.
     const drawTorch = (tx: number, ty: number) => {
       // Bracket
       ctx.fillStyle = '#4A4A4A';
       ctx.fillRect(tx - 2, ty - 15, 4, 15);
       ctx.fillRect(tx - 6, ty - 18, 12, 5);
       // Flame
-      ctx.fillStyle = '#FF8800';
+      ctx.fillStyle = '#80c3e3';
       ctx.beginPath();
       ctx.moveTo(tx - 5, ty - 18);
       ctx.quadraticCurveTo(tx, ty - 35, tx + 5, ty - 18);
       ctx.fill();
-      ctx.fillStyle = '#FFCC00';
+      ctx.fillStyle = '#e1f3ff';
       ctx.beginPath();
       ctx.moveTo(tx - 3, ty - 19);
       ctx.quadraticCurveTo(tx, ty - 30, tx + 3, ty - 19);
       ctx.fill();
       // Glow
       const glow = ctx.createRadialGradient(tx, ty - 25, 2, tx, ty - 25, 40);
-      glow.addColorStop(0, 'rgba(255, 150, 50, 0.15)');
-      glow.addColorStop(1, 'rgba(255, 100, 20, 0)');
+      glow.addColorStop(0, 'rgba(112, 194, 225, 0.15)');
+      glow.addColorStop(1, 'rgba(112, 194, 225, 0)');
       ctx.fillStyle = glow;
       ctx.fillRect(tx - 40, ty - 65, 80, 80);
     };
 
-    drawTorch(100, y - 60);
-    drawTorch(400, y - 60);
-    drawTorch(640, y - 60);
-    drawTorch(880, y - 60);
-    drawTorch(1080, y - 60);
+    for (const x of CASTLE_SCONCE_X) drawTorch(x, y - 100);
 
     // Suits of armor on ground
     const drawArmor = (ax: number, ay: number, size: number) => {
@@ -670,49 +559,9 @@ export const castle: ArenaPack = {
   },
 
   drawForegroundNature: (ctx: Ctx2D, arena: Arena) => {
+    if (drawCastleCartoonForeground(ctx, arena)) return;
     const ground = arena.platforms[0];
     const gy = ground.y;
-
-    // Large foreground stone pillar — left side
-    ctx.save();
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = '#1A1A2E';
-    // Main pillar body
-    ctx.fillRect(-10, gy - 80, 55, 110);
-    // Pillar capital (wider top)
-    ctx.fillRect(-15, gy - 85, 65, 10);
-    // Pillar base (wider bottom)
-    ctx.fillRect(-15, gy + 20, 65, 10);
-    // Stone texture lines
-    ctx.globalAlpha = 0.15;
-    ctx.strokeStyle = '#3A3A5E';
-    ctx.lineWidth = 1;
-    for (let sy = gy - 75; sy < gy + 20; sy += 18) {
-      ctx.beginPath();
-      ctx.moveTo(-5, sy);
-      ctx.lineTo(40, sy);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Large foreground stone pillar — right side
-    ctx.save();
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = '#1A1A2E';
-    ctx.fillRect(1240, gy - 75, 50, 105);
-    ctx.fillRect(1235, gy - 80, 60, 10);
-    ctx.fillRect(1235, gy + 20, 60, 10);
-    // Stone texture lines
-    ctx.globalAlpha = 0.15;
-    ctx.strokeStyle = '#3A3A5E';
-    ctx.lineWidth = 1;
-    for (let sy = gy - 70; sy < gy + 20; sy += 18) {
-      ctx.beginPath();
-      ctx.moveTo(1245, sy);
-      ctx.lineTo(1285, sy);
-      ctx.stroke();
-    }
-    ctx.restore();
 
     // Large iron chandelier silhouette — center
     ctx.save();
@@ -776,14 +625,14 @@ export const castle: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx: Ctx2D, w: WeatherParticle) => {
-    // Torch spark — concentric circles, no rotation. Draw at world coords;
+    // Silver sconce spark — concentric circles, no rotation. Draw at world coords;
     // reset globalAlpha at end since save/restore is gone.
-    ctx.fillStyle = w.color || '#FF8844';
+    ctx.fillStyle = w.color || '#b3d9e7';
     ctx.globalAlpha = 0.7;
     ctx.beginPath();
     ctx.arc(w.x, w.y, w.size, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#FFCC66';
+    ctx.fillStyle = '#e3f1f0';
     ctx.beginPath();
     ctx.arc(w.x, w.y, w.size * 0.4, 0, Math.PI * 2);
     ctx.fill();
@@ -839,7 +688,8 @@ export const castle: ArenaPack = {
     }
   }),
 
-  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, fadeAlpha) => {
+  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, fadeAlpha, contactTimer) => {
+    if (drawCastleGuardianSpring(ctx, x, y, contactTimer ?? 0)) return;
     const halfW = size * 0.45;
     const squash = 1 + bounceTimer * 0.03;
     const bodyH = size * 0.8 / squash;
@@ -912,15 +762,15 @@ export const castle: ArenaPack = {
 
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
-    // Embers only — torch halo comes from the L2 emitter pipeline (`lights`).
+    // Cool sconce motes; the halo comes from the L2 emitter pipeline (`lights`).
     ctx.save();
-    for (let i = 0; i < TORCH_X.length; i++) {
-      const tx = TORCH_X[i];
+    for (let i = 0; i < CASTLE_SCONCE_X.length; i++) {
+      const tx = CASTLE_SCONCE_X[i];
       const u = ((time * 0.3 + i * 0.31) % 1);
       ctx.globalAlpha = (1 - u) * 0.45;
-      ctx.fillStyle = '#ff9a3a';
+      ctx.fillStyle = '#a4dcf0';
       ctx.beginPath();
-      ctx.arc(tx + fastSin(time * 1.5 + i) * 4, TORCH_FLAME_Y - 16 - u * 40, 1.1, 0, Math.PI * 2);
+      ctx.arc(tx + fastSin(time * 1.5 + i) * 4, CASTLE_SCONCE_FLAME_Y - 16 - u * 40, 1.1, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -952,12 +802,13 @@ export const castle: ArenaPack = {
         out.push(castleCobweb(c.x, c.y, c.dirX, c.dirY));
       }
     }
-    // Banners — one per banner-eligible floating platform (width >= 100).
+    // Sparse Moonlit placement leaves the center action and low shelves clear.
     const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const bx = plat.x + plat.width / 2;
       const by = plat.y + plat.height;
+      if (!(by < 430 && (bx < 250 || bx > 1030 || Math.abs(bx - 640) < 70))) continue;
       out.push(castleBanner(bx, by, i));
     }
     return out;
@@ -982,16 +833,16 @@ export const castle: ArenaPack = {
 
   musicFile: 'castle.mp3',
 
-  // L2 emitters: warm torchlight at the existing TORCH_X positions. Replaces
+  // L2 emitters: restrained cool light at the sconce positions. Replaces
   // the alpha-modulated halo in drawAnimatedBackground that gets crushed by
   // the fg-night-tint multiply at midnight; the EmitterPipeline writes to a
   // screen-blend DOM sibling that punches through.
-  lights: TORCH_X.map((tx, i) => ({
+  lights: CASTLE_SCONCE_X.map((tx, i) => ({
     kind: 'point' as const,
     x: tx,
-    y: TORCH_FLAME_Y,
-    color: { r: 255, g: 150, b: 60 },
-    intensity: 0.85,
+    y: CASTLE_SCONCE_FLAME_Y,
+    color: { r: 151, g: 198, b: 228 },
+    intensity: 0.72,
     radius: 110,
     falloff: 'inverse-square' as const,
     flicker: { seed: i + 1, amplitude: 0.1 },

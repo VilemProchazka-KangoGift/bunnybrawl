@@ -130,7 +130,9 @@ export function drawSpringMushroom(ctx: Ctx2D, spring: SpringMushroom, theme: Th
 
   // Custom spring renderer
   if (theme.drawCustomSpring) {
-    theme.drawCustomSpring(ctx, x, y, s, squash, growScale, fadeAlpha);
+    // Keep the wave value for older arena skins; Castle also needs the raw
+    // contact cooldown to hold its authored crouch immediately after impact.
+    theme.drawCustomSpring(ctx, x, y, s, squash, growScale, fadeAlpha, spring.bounceTimer);
     return;
   }
 

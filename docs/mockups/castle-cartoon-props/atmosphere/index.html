@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Castle atmosphere study</title>
+<style>
+  :root { color-scheme: dark; font: 16px/1.45 system-ui, sans-serif; background: #172033; color: #eef3f4; }
+  body { max-width: 1320px; margin: auto; padding: 24px; }
+  h1 { margin: 0 0 8px; } p { max-width: 80ch; color: #bfccd9; }
+  .grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 600px), 1fr)); }
+  article { background: #263249; border: 1px solid #52627a; border-radius: 12px; padding: 16px; }
+  article.recommended { border-color: #d8c788; }
+  h2 { margin: 0 0 10px; font-size: 1.3rem; }
+  img { display: block; width: 100%; height: auto; background: #101929; }
+  .caption { margin: 8px 0 0; }
+</style>
+<body>
+<h1>Castle atmosphere study</h1>
+<p>Matched 1280 × 720 scenes. The Silver Moon follow-up grades platform faces and Castle props with the room. Character sprites keep their original colors for gameplay contrast.</p>
+<div class="grid">
+  <article><h2>Current</h2><img src="atmo-current.png" alt="Current blue-gray Castle"><p class="caption">Quiet baseline, with a narrow background value range.</p></article>
+  <article><h2>Original Silver Moon</h2><img src="atmo-silver.png" alt="Original pale Silver Moon"><p class="caption">Too pale; foreground Castle materials remain blue.</p></article>
+  <article><h2>Balanced Silver · before</h2><img src="atmo-silver-balanced-before.png" alt="Previous Balanced Silver Castle"><p class="caption">Foreground materials match, but the background is still a little pale.</p></article>
+  <article class="recommended"><h2>Balanced Silver · quieter</h2><img src="atmo-silver-balanced.png" alt="Quieter Balanced Silver Castle"><p class="caption">Background lift reduced to about 55% of the previous adjustment; foreground treatment retained.</p></article>
+  <article><h2>Deep Silver</h2><img src="atmo-silver-deep.png" alt="Deep Silver Castle"><p class="caption">Deeper blue night shadows and a cool moon focus.</p></article>
+  <article><h2>Pewter Moon</h2><img src="atmo-silver-pewter.png" alt="Desaturated Pewter Castle"><p class="caption">More neutral stone and props; less blue Castle identity.</p></article>
+  <article><h2>B · Violet Vigil</h2><img src="atmo-violet.png" alt="Violet Castle"><p class="caption">Theatrical violet shadow; banners and platform tops compete more.</p></article>
+  <article><h2>C · Ember Hall</h2><img src="atmo-ember.png" alt="Warm amber Castle"><p class="caption">Warm wall and lamp pools; would require coordinated flame colors.</p></article>
+</div>
+</body></html>

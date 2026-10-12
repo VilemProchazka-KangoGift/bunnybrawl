@@ -6,7 +6,7 @@ afterEach(() => {
 });
 
 describe('illustrated arena backdrop preload', () => {
-  it.each(['rooftops', 'treetops', 'waterfall', 'volcano', 'castle',
+  it.each(['rooftops', 'treetops', 'waterfall', 'volcano',
     'haunted_graveyard', 'candy_land', 'underwater', 'space_station'])(
     'loads only the selected %s plate and leaves unrelated images undecoded', async (arenaId) => {
       const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => new Blob(['plate']) }));
@@ -23,6 +23,29 @@ describe('illustrated arena backdrop preload', () => {
       expect(art.getIllustratedBackdrop('winter_lake')).toBeNull();
     },
   );
+
+  it('prefetches and decodes the castle backdrop, props, and both Guardian spring poses', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => new Blob(['castle']) }));
+    const bitmap = { width: 128 } as ImageBitmap;
+    const decodeMock = vi.fn(async () => bitmap);
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('createImageBitmap', decodeMock);
+    const art = await import('./illustratedBackdropAsset');
+
+    await art.prefetchIllustratedBackdrop('castle');
+    await art.preloadIllustratedBackdrop('castle');
+
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(decodeMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([
+      expect.stringContaining('castle-painted-balanced-silver.webp'),
+      ...['guard', 'sconce', 'chandelier'].map(name => expect.stringContaining(`castle-${name}-cartoon-balanced-silver.webp`)),
+      expect.stringContaining('castle-guardian-rest-balanced-silver.webp'),
+      expect.stringContaining('castle-guardian-compressed-balanced-silver.webp'),
+    ]));
+    expect(Object.values(art.getCastlePropArt())).toEqual([bitmap, bitmap, bitmap]);
+    expect(Object.values(art.getCastleGuardianArt())).toEqual([bitmap, bitmap]);
+  });
 
   it('reuses the lobby fetch and decodes only once for concurrent match requests', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => new Blob(['image']) }));
