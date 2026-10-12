@@ -1,6 +1,10 @@
 import {drawZeroGZone} from '../../../src/engine/rendering/hazards/zones.ts';
 export function drawCue(c,z,t,variant){
   if(variant===0){drawZeroGZone(c,z,t);return;}
+  // All alternatives mark the exact gameplay bounds, including the minimal option.
+  c.save();c.strokeStyle='#65dfff';c.globalAlpha=.6;c.lineWidth=2;
+  c.strokeRect(z.x+1,z.y+1,z.width-2,z.height-2);
+  c.restore();
   if(variant===3)return;
   c.save();c.beginPath();c.rect(z.x,z.y,z.width,z.height);c.clip();
   if(variant===1){
