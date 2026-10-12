@@ -33,7 +33,35 @@ function drawWaterfall(c,z,t,variant,top){
   g.addColorStop(0,'rgba(39,115,153,.65)');g.addColorStop(.25,'rgba(103,182,209,.62)');
   g.addColorStop(.6,'rgba(159,216,225,.7)');g.addColorStop(1,'rgba(50,130,172,.65)');
   c.fillStyle=g;c.fillRect(-8,0,w+16,h);
-  if(variant===1){
+  if(variant>=4){
+    // Broad connected folds: light crests against cool recessed channels.
+    for(let j=0;j<6;j++){
+      const x=j*w/5,wide=variant===6?48:34;
+      c.save();c.beginPath();
+      for(let k=0;k<=h;k+=10)c.lineTo(x-wide+Math.sin(k*.013-t*1.6+j)*14,k);
+      for(let k=h;k>=0;k-=10)c.lineTo(x+wide+Math.sin(k*.018-t*1.4+j)*18,k);
+      c.closePath();c.clip();
+      const fold=c.createLinearGradient(x-wide,0,x+wide,0);
+      fold.addColorStop(0,'rgba(13,61,105,.45)');
+      fold.addColorStop(.28,'rgba(45,126,166,.16)');
+      fold.addColorStop(.58,variant===5?'rgba(233,250,242,.55)':'rgba(184,232,233,.4)');
+      fold.addColorStop(.76,'rgba(113,195,212,.22)');fold.addColorStop(1,'rgba(20,83,128,.4)');
+      c.fillStyle=fold;c.fillRect(x-wide-25,0,wide*2+50,h);c.restore();
+    }
+    const depth=c.createLinearGradient(0,0,0,h);
+    depth.addColorStop(0,'rgba(221,245,237,.28)');depth.addColorStop(.3,'rgba(28,95,143,.06)');depth.addColorStop(.7,'rgba(11,66,118,.22)');depth.addColorStop(1,'rgba(199,240,230,.35)');
+    c.fillStyle=depth;c.fillRect(-8,0,w+16,h);
+    if(variant===5||variant===6)for(let j=0;j<9;j++){
+      const yy=((t*190+j*87)%(h+110))-90;
+      c.beginPath();c.moveTo(-8,yy);
+      c.bezierCurveTo(w*.25,yy-35,w*.55,yy+55,w+8,yy-10);
+      c.lineTo(w+8,yy+20);c.bezierCurveTo(w*.6,yy+80,w*.3,yy-5,-8,yy+45);c.closePath();
+      c.fillStyle=variant===6?'rgba(17,77,126,.23)':'rgba(225,247,239,.18)';c.fill();
+    }
+    if(variant===7){
+      const veil=c.createLinearGradient(0,0,w,0);veil.addColorStop(0,'rgba(13,69,119,.25)');veil.addColorStop(.5,'rgba(220,245,235,.23)');veil.addColorStop(1,'rgba(13,69,119,.25)');c.fillStyle=veil;c.fillRect(0,0,w,h);
+    }
+  }else if(variant===1){
     for(let j=0;j<7;j++){
       const x=20+j*(w-40)/6;
       c.beginPath();c.moveTo(x-16,0);
