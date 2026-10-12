@@ -25,6 +25,6 @@ function render(){
 $('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause':'Play';};
 $('replay').onclick=()=>{time=0;playing=true;$('play').textContent='Pause';render();};
 $('time').oninput=()=>{playing=false;$('play').textContent='Play';time=Number($('time').value);render();};
-$('view').onchange=()=>{document.querySelector('.panels').classList.toggle('focus',$('view').value!=='all');document.querySelectorAll('section').forEach((s,i)=>s.hidden=$('view').value!=='all'&&Number($('view').value)!==i);};
+$('view').onchange=()=>{document.querySelectorAll('.panels').forEach(p=>p.classList.toggle('focus',$('view').value!=='all'));document.querySelectorAll('section').forEach((s,i)=>s.hidden=$('view').value!=='all'&&Number($('view').value)!==i);};
 $('status').textContent='Ready · production unchanged';window.__zeroGStudy={render};
 function tick(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number($('speed').value))%8;last=now;render();requestAnimationFrame(tick);}requestAnimationFrame(tick);
