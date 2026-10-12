@@ -12,7 +12,7 @@ const browser = await chromium.launch(process.env.CASTLE_PROPS_BROWSER
 try {
   const page = await browser.newPage();
   for (const name of ['duchess', 'king']) {
-    const source = await readFile(join(directory, `${name}-source.png`));
+    const source = await readFile(join(directory, `${name}-cartoon-source.png`));
     const output = await page.evaluate(async base64 => {
       const image = new Image();
       image.src = `data:image/png;base64,${base64}`;

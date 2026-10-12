@@ -1,5 +1,5 @@
 import type { Arena, Ctx2D } from '../../types';
-import { getCastleGuardianArt, getCastlePropArt } from '../illustratedBackdropAsset';
+import { getCastlePropArt } from '../illustratedBackdropAsset';
 import { drawCastleGalleryDecoration, drawCastleWallDetails } from './castleRoyalGallery';
 
 type CastleArt = { guard: ImageBitmap; sconce: ImageBitmap; chandelier: ImageBitmap; duchess: ImageBitmap | null; king: ImageBitmap | null };
@@ -26,7 +26,7 @@ export function drawCastleCartoonBackground(c: Ctx2D, arena: Arena): boolean {
   const groundY = arena.platforms[0].y;
   const upperGallery = arena.platforms.find(platform => platform.y < 300 && platform.width > 700);
   c.save();
-  drawCastleWallDetails(c, getCastleGuardianArt().rest);
+  drawCastleWallDetails(c);
   if (upperGallery) drawCastleGalleryDecoration(c, upperGallery);
   c.globalAlpha = .83;
   if (art.duchess) c.drawImage(art.duchess, 289, groundY - 184, 67, 91);

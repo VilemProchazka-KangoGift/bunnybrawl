@@ -1,30 +1,5 @@
 import type { Ctx2D, Platform } from '../../types';
 
-function drawGargoyleKeystone(c: Ctx2D, x: number, y: number, gargoyle: ImageBitmap, mirror: boolean): void {
-  c.save();
-  c.translate(x, y);
-  if (mirror) c.scale(-1, 1);
-  c.lineJoin = 'round';
-  // The pointed stone wedge joins the arch. The spring's existing winged
-  // gargoyle art is cropped above its plinth and reads as a carved figure.
-  c.globalAlpha = .58;
-  c.fillStyle = '#74889a';
-  c.strokeStyle = '#465c70';
-  c.lineWidth = 2;
-  c.beginPath();
-  c.moveTo(-23, 10);
-  c.quadraticCurveTo(0, 4, 23, 10);
-  c.lineTo(13, 23);
-  c.lineTo(0, 33);
-  c.lineTo(-13, 23);
-  c.closePath();
-  c.fill();
-  c.stroke();
-  c.globalAlpha = .72;
-  c.drawImage(gargoyle, 0, 0, gargoyle.width, gargoyle.height * .86, -30, -24, 60, 47);
-  c.restore();
-}
-
 function drawCobweb(c: Ctx2D, x: number, y: number, direction: number): void {
   c.save();
   c.translate(x, y);
@@ -81,12 +56,8 @@ function drawWornPlaster(c: Ctx2D, x: number, y: number, mirror: boolean): void 
   c.restore();
 }
 
-export function drawCastleWallDetails(c: Ctx2D, gargoyle: ImageBitmap | null): void {
-  // Inset wall details only: the small gargoyles perch on existing arch points.
-  if (gargoyle) {
-    drawGargoyleKeystone(c, 376, 114, gargoyle, false);
-    drawGargoyleKeystone(c, 850, 120, gargoyle, true);
-  }
+export function drawCastleWallDetails(c: Ctx2D): void {
+  // Sparse age marks leave the window arches clear.
   drawCobweb(c, 18, 228, 1);
   drawCobweb(c, 1262, 221, -1);
   drawWornPlaster(c, 262, 366, false);
