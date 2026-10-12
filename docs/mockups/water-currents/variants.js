@@ -33,7 +33,28 @@ function drawWaterfall(c,z,t,variant,top){
   g.addColorStop(0,'rgba(39,115,153,.65)');g.addColorStop(.25,'rgba(103,182,209,.62)');
   g.addColorStop(.6,'rgba(159,216,225,.7)');g.addColorStop(1,'rgba(50,130,172,.65)');
   c.fillStyle=g;c.fillRect(-8,0,w+16,h);
-  if(variant>=4){
+  if(variant>=8){
+    const count=variant===11?4:variant===8?5:7;
+    for(let j=0;j<count;j++){
+      const x=j*w/(count-1),wide=w/count*.7;
+      c.save();c.beginPath();
+      for(let k=0;k<=h;k+=12)c.lineTo(x-wide+Math.sin(k*.011-t*1.8+j)*18,k);
+      for(let k=h;k>=0;k-=12)c.lineTo(x+wide+Math.sin(k*.014-t*1.5+j+1)*22,k);
+      c.closePath();c.clip();
+      const g=c.createLinearGradient(x-wide,0,x+wide,0);
+      g.addColorStop(0,'rgba(14,69,116,.38)');g.addColorStop(.3,'rgba(61,150,187,.12)');g.addColorStop(.65,'rgba(217,243,235,.48)');g.addColorStop(1,'rgba(30,108,151,.3)');c.fillStyle=g;c.fillRect(x-wide-25,0,wide*2+50,h);c.restore();
+    }
+    if(variant!==11)for(let j=0;j<12;j++){
+      const yy=((t*(variant===10?240:180)+j*71)%(h+110))-90;
+      const x=variant===8?-10:(j*67%w)-35,ww=variant===8?w+20:90+j%3*35;
+      c.beginPath();c.moveTo(x,yy);
+      c.bezierCurveTo(x+ww*.25,yy-28,x+ww*.55,yy+44,x+ww,yy-7);
+      c.lineTo(x+ww,yy+25);c.bezierCurveTo(x+ww*.5,yy+75,x+ww*.2,yy+4,x,yy+38);c.closePath();
+      c.fillStyle=variant===10&&j%2?'rgba(20,84,130,.3)':'rgba(217,244,235,.28)';c.fill();
+      if(variant===9){c.beginPath();c.moveTo(x,yy);c.bezierCurveTo(x+ww*.25,yy-28,x+ww*.55,yy+44,x+ww,yy-7);c.strokeStyle='rgba(240,252,243,.48)';c.lineWidth=3;c.stroke();}
+    }
+    if(variant===11){const g=c.createLinearGradient(0,0,w,0);g.addColorStop(0,'rgba(18,78,129,.2)');g.addColorStop(.5,'rgba(197,233,229,.2)');g.addColorStop(1,'rgba(18,78,129,.25)');c.fillStyle=g;c.fillRect(0,0,w,h);}
+  }else if(variant>=4){
     // Broad connected folds: light crests against cool recessed channels.
     for(let j=0;j<6;j++){
       const x=j*w/5,wide=variant===6?48:34;
