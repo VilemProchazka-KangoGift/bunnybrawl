@@ -1,3 +1,4 @@
+import { drawWarmFirefly } from './fireflyEffects';
 import type { Ctx2D } from '../types';
 import type { MatchState } from '../types';
 import type { ThemeConfig } from '../themes/types';
@@ -51,7 +52,7 @@ export function fireflyPosition(i: number, frameTimeMs: number, out: { x: number
 // Pre-rendered visuals. Stars: the entire 30-star field baked into one bitmap
 // — replaces 30 fills/frame with a single drawImage. Tradeoff: per-star
 // twinkle is replaced by a single uniform fade modulated by globalAlpha.
-// Fireflies: a single 12×12 stamp (glow + body composited at the right alpha
+// Fireflies: a single 16×16 stamp (glow + body composited at the right alpha
 // ratios) — replaces 16 fills/frame (8×glow + 8×body) with 8 drawImages,
 // preserving per-firefly position and pulse.
 const STAR_FIELD_HEIGHT = Math.ceil(CANVAS_HEIGHT * 0.35);
@@ -86,16 +87,10 @@ function getStarField(): OffscreenCanvas | null {
 function getFireflyStamp(): OffscreenCanvas | null {
   if (_firefly) return _firefly;
   if (typeof OffscreenCanvas === 'undefined') return null;
-  _firefly = new OffscreenCanvas(12, 12);
+  _firefly = new OffscreenCanvas(16, 16);
   const c = _firefly.getContext('2d')!;
-  // Glow at 0.3, body at 1.0 — same ratio the original two-pass code used,
-  // multiplied through globalAlpha = pulse*fireflyAlpha at draw time.
-  c.fillStyle = '#AAFF44';
-  c.globalAlpha = 0.3;
-  c.beginPath(); c.arc(6, 6, 6, 0, Math.PI * 2); c.fill();
-  c.fillStyle = '#CCFF66';
-  c.globalAlpha = 1;
-  c.beginPath(); c.arc(6, 6, 2, 0, Math.PI * 2); c.fill();
+  c.translate(8, 8);
+  drawWarmFirefly(c);
   return _firefly;
 }
 
@@ -275,23 +270,17 @@ export function drawDayNightCycle(
         fireflyPosition(i, frameTime, pos);
         const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
         ctx.globalAlpha = fireflyAlpha * pulse;
-        ctx.drawImage(stamp, pos.x - 6, pos.y - 6);
+        ctx.drawImage(stamp, pos.x - 8, pos.y - 8);
       }
     } else {
-      ctx.fillStyle = '#AAFF44';
       for (let i = 0; i < FIREFLY_COUNT; i++) {
         fireflyPosition(i, frameTime, pos);
         const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
-        ctx.globalAlpha = fireflyAlpha * pulse * 0.3;
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#CCFF66';
+        ctx.save();
+        ctx.translate(pos.x, pos.y);
         ctx.globalAlpha = fireflyAlpha * pulse;
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#AAFF44';
+        drawWarmFirefly(ctx);
+        ctx.restore();
       }
     }
   }
