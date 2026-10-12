@@ -446,12 +446,12 @@ describe('Renderer — renderFrame conditional branches', () => {
     expect(drawGeyser).toHaveBeenCalled();
   });
 
-  it('draws bouncy platforms when arena has them', () => {
+  it('does not add an overlay to bouncy platforms', () => {
     const arena = makeArena();
     arena.bouncyPlatforms = [1]; // platform index 1
     renderer.renderFrame(makeState(), arena, []);
-    expect(drawBouncyPlatformOverlay).toHaveBeenCalled();
-    expect(renderer.getDiagnostics().bouncyPlatforms).toBe(true);
+    expect(drawBouncyPlatformOverlay).not.toHaveBeenCalled();
+    expect(renderer.getDiagnostics().bouncyPlatforms).toBe(false);
   });
 
   it('draws active lava rocks', () => {

@@ -30,7 +30,7 @@ import { drawFpsCounter } from './fpsCounter';
 import {
   drawCarrot, drawSpringMushroom, drawThorn,
   drawRespawnEntrances, drawWeather, drawParticles, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail,
-  drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay,
+  drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser,
   drawSkyCycle, drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
   drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
@@ -1282,17 +1282,6 @@ export class Renderer implements IRenderer {
           }
         }
         d.effectZones = true;
-      }
-
-      // Bouncy platform wobble
-      if (arena.bouncyPlatforms) {
-        for (const bi of arena.bouncyPlatforms) {
-          const bp = arena.platforms[bi];
-          if (!bp) continue;
-          const wobble = matchState.bouncyWobble.get(bi) || 0;
-          drawBouncyPlatformOverlay(ctx, bp, wobble, matchState.timeElapsed);
-        }
-        d.bouncyPlatforms = true;
       }
 
       perfTrace.end('render.bg', bgStart);
