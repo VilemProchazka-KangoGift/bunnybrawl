@@ -97,9 +97,9 @@ const CARROT_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
 /** Seconds of bright pulse on carrot spawn before settling to baseline. */
 const CARROT_SPAWN_FLASH_S = 0.6;
 
-/** Yellow-green firefly emitter color, matches the visual draw in effects.ts. */
+/** Warm amber firefly emitter color, matches the visual draw in effects.ts. */
 const FIREFLY_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
-  { r: 170, g: 255, b: 68 };
+  { r: 255, g: 220, b: 128 };
 /** Reused scratch for fireflyPosition fills (avoids per-firefly alloc). */
 const _fireflyPos = { x: 0, y: 0 };
 /** Pre-built per-firefly flicker configs — distinct seeds so they pulse
