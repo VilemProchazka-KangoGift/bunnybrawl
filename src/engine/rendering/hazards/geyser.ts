@@ -66,7 +66,7 @@ export function drawFineGeyser(c: Ctx2D, z: {
         c.restore();
     }
     for (let i = 0; i < 30; i++) {
-        const f = (((t * 155 + i * 43) % z.height + z.height) % z.height) / z.height, y = bottom - f * z.height;
+        const f = ((t * 155 + i * 43) % z.height) / z.height, y = bottom - f * z.height;
         const x = cx + Math.sin(i * 2.3) * z.width * .4 + Math.sin(t * 2 + i) * 9, r = (6 + i % 4 * 3) * .7;
         lobe(c, x, y, r, r * 1.17, i + t, water, .48);
         c.beginPath();

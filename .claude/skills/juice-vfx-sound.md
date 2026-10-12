@@ -295,5 +295,3 @@ Selected Comet glow + ash puffs: four outlined grey irregular puffs spaced by cu
 Renderer-only worker bootstrap must register built-in entities before drawing. Hazard arrays and renderer diagnostic flags can be populated even when no entity draw functions are registered; the falling-rock Playwright regression counts actual ash fills in both worker modes.
 
 Geyser selection: Fine shaded ribbons, drawn by rendering/hazards/geyser.ts. Seven clipped shaded tongues and 30 irregular rimmed bubbles at 155px/s replace the faint rectangle and tiny bubble circles. Preserve actual effect-zone geometry and activation timers.
-
-Water currents reuse Fine shaded ribbons in local coordinates: rotate for horizontal flow and reverse animation time for left/down. Normalize bubble wrapping for negative time. Preserve Waterfall visual source at y=65 and force-zone bounds at y=160. Slow devices use a static flow sample.
