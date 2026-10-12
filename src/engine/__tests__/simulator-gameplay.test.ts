@@ -2015,7 +2015,7 @@ describe('Simulator — disconnectPlayer', () => {
 // ===================================================================
 
 describe('Simulator — Screen Effects', () => {
-  it('after a stomp, screenShake is set > 0', () => {
+  it('a stomp emits kill camera feedback through the kill feed', () => {
     const { sim } = createSim();
     skipCountdown(sim);
     const state = sim.getState();
@@ -2032,7 +2032,10 @@ describe('Simulator — Screen Effects', () => {
 
     sim.fixedUpdate(FIXED_TIMESTEP);
 
-    expect(state.screenShake).toBeGreaterThan(0);
+    expect(state.screenShake).toBe(0);
+    expect(state.hitstopZoom).toBe(0);
+    expect(state.killFeed.at(-1)).toMatchObject({attacker:attacker.id,victim:victim.id});
+    expect(attacker.hitstopTimer).toBeGreaterThan(0);
   });
 
   it('screenShake decays toward 0 over subsequent frames', () => {

@@ -249,3 +249,49 @@ Keep lava ripples separate from Ember cough: the surface ripple lasts 0.6 second
 ### Wide lava-entry wave
 
 Selected Wide rolling wave + droplets uses a low rounded wave and seven highlighted molten drops in surfaceImpact.ts. Keep the existing ripple packet and 0.6-second lifetime; branch only on lava so water keeps its original rings. Preserve the gallery baseline and compare selected production pixels at several ages. Verify natural Volcano entries in both worker modes.
+
+### Dizzy-star comparisons
+
+Dizzy expression follows respawn protection in Simulator, rather than an independent stun timer. Compare stars with the existing blink and shield sparks toggleable, and include no overlay. Freeze drawExpression and protectionEffects for stable current references; verify baseline pixels at several animation times and compare all 19 authored idle poses. The dizzy star anchor uses the 32px collision body, not the atlas artwork bounds. Document schematic timing and omitted entrance clouds/physics explicitly.
+
+### Chunky dizzy stars
+
+Selected chunky stars use uneven outlined four-point silhouettes with warm highlights in drawExpression. Preserve the three-star orbit, absolute frame-time phase, run bounce and protection expression trigger. Keep the original drawing frozen in the gallery and verify selected production pixels, including both worker modes during respawn protection.
+
+### Scared sweat studies
+- Scared is gated by downward velocity > 400 and a normal expression; anger and protection can override it. Compare normal fall (jump pose) and fast stomp (stomp pose), with pose echoes toggled independently. Freeze the current expression and echo geometry, retain the 32px collider anchor, and disclose any atlas adapter or omitted body transforms in comparison galleries.
+- Selected No overlay: retain scared expression state for simulation/network compatibility, but draw no generic sweat overlay. Keep authored poses and fast-stomp echoes.
+
+### Kill-streak aura studies
+- Current aura is four translucent circles behind the sprite at killStreak >= 3, suppressed by getSlowDevice(). Freeze both palette and geometry, force only the enabled gate for comparison, and keep all variants behind the character. Compare idle/run/jump at native scale across the roster; distinguish collider anchoring from atlas-size anchoring. Scripted streak activation is not a combat playtest.
+- Selected No aura: remove the renderer block and unused palette/device import; retain streak scoring, AI awareness and network state. Keep the old comparison frozen.
+
+### Angry-face cue comparisons
+- All plush packs set authoredAngryBrows, so Current and No extra overlay are identical; expression does not select a new atlas pose. Keep that intentional baseline match explicit. Eye effects need per-character, per-pose atlas anchors: idle/run/jump faces can shift significantly, especially Horse, Cat and Tiger. Use the real source cells and compare across the roster before implementing a selected cue.
+- Selected No extra overlay: current plush behavior already matches. Retain the authored-brow guard, faces and proximity expression state; merge only the comparison and selection record.
+
+### Thorn slowdown tint comparisons
+- Slowdown combines a five-second opacity pulse and a separate collider-sized red oval. Freeze and isolate them in studies; No tint removes color only unless opacity removal is explicitly selected. Burning suppresses thorn color through the renderer's else-if priority, but the shared opacity modulation still applies. Compare all roster poses and burn overlap, and disclose use of the fire-gradient fallback rather than cached fire art.
+- To restore gameplay prominence while keeping the warm wash, layer the wash with an independent pulse. Preserve the original abs(sin(slowTimer * 8)) phase and 0.3 peak fill opacity, then compare ruffled cloud, uneven comic burst and pointed thorn-petal contours. Keep the unmodified original and wash-only cards as reference; validate burn suppression and all roster poses for the combinations.
+- Selected Wash + comic burst: cache source-in silhouette masks in a WeakMap keyed by the cached sprite. Draw the wash inside the sprite transform, cancel only the shared slow-opacity factor, and preserve inherited blink/echo alpha. Keep masks off the main canvas and suppress both color layers while burning. Freeze the pre-change source revision for gallery verification after production changes.
+
+### Directional damage flash studies
+- Damage flash is a world-side four-pixel red strip, independent of sprite facing. Hazards/ghosts set 0.4s; rocks/stomp victims set 0.3s. Burning suppresses the strip. Freeze the exact block for comparisons, offer independent hit-side/facing controls, and isolate optional slowdown/burn layers. A standing atlas study does not validate death poses or camera/hitstop feedback.
+- Selected Red silhouette flash replaces the side strip with a cached #F04435 sprite mask at min(0.78, remainingTimer * 4). Preserve trigger timers, burn gate and direction-presence gate; cancel only the shared slow fade and retain inherited blink/echo opacity. Match the generic splat silhouette for stomp victims and keep the white hitstop flash on top.
+
+### Carrot proximity blush comparisons
+- Proximity blush is computed in Renderer within 100px of active carrots; it is separate from pickup effects. Original dots use fixed collider-relative world coordinates and can drift from authored faces. Freeze that original exactly; alternatives using cheek placement need per-character/per-pose atlas anchors. Compare idle, both walk cells and jump, while preserving a no-overlay reference.
+- Selected No extra overlay: remove the blush block, nearCarrot draw argument and renderer-only proximity scan. Preserve carrot collection, AI awareness and pickup effects. Keep the original gallery frozen to its pre-change source revision.
+
+### Screen flash comparisons
+- Global screenFlash uses min(1, timer / 0.15) and covers HUD plus world. Hazard/ghost hits set only 0.06s (0.4 peak opacity); match end sets 0.15s (white peak). Compare both event strengths over matched full-arena/HUD frames, not isolated character crops. Freeze the original block; distinguish static scene/timing studies from complete impact or victory validation. Edge/corner alternatives should preserve center readability.
+- Selected Current white flash: trigger 0.06s from the shared player score-increase transition, covering kills and carrot pickups. Remove lava, ghost and thorn flash requests; retain their local feedback. Use Math.max to preserve stronger match-end flashes. Priming/resetting the score baseline must not replay points; kills without a score increase intentionally do not flash.
+
+### Falling-rock cue studies
+Current lava rock uses a rotating jagged body, hot cracks and a circular orange glow, with no emitted trail. Freeze the rock drawing and compare warning cues at 8-16px radius and 150-300px/s. Use the same Volcano renderer scene for every card. With multiple Renderers sharing the same unchanged state, HUD dirty tracking may only draw the first HUD; composite that identical HUD across all study cards. Scripted platform pass-through is a visual study, not collision validation.
+
+Selected Comet glow + ash puffs: four outlined grey irregular puffs spaced by current downward velocity and 65ms, plus an upward fixed-world flame silhouette at 0.3 alpha. Rotate only the original rock body/cracks. Draw in the existing lava-rock entity layer and skip inactive rocks; no particles or wire fields are needed. Pass simulation time from the entity render context for subtle puff rotation.
+
+Renderer-only worker bootstrap must register built-in entities before drawing. Hazard arrays and renderer diagnostic flags can be populated even when no entity draw functions are registered; the falling-rock Playwright regression counts actual ash fills in both worker modes.
+
+Geyser selection: Fine shaded ribbons, drawn by rendering/hazards/geyser.ts. Seven clipped shaded tongues and 30 irregular rimmed bubbles at 155px/s replace the faint rectangle and tiny bubble circles. Preserve actual effect-zone geometry and activation timers.

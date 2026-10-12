@@ -1,0 +1,6 @@
+function drawCurrentOpacity(ctx,slowTimer){
+  if (slowTimer > 0) {
+    ctx.globalAlpha = Math.max(ctx.globalAlpha ?? 1, 0) * (0.7 + Math.sin(slowTimer * 8) * 0.15);
+  }
+
+}

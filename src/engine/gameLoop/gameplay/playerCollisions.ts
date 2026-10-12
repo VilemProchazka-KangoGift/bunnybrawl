@@ -87,8 +87,6 @@ export function handleThornCollision(player: Player, state: MatchState): HazardH
     type: 'thorn',
     px, py,
     sx: tx, sy: ty,
-    screenShake: 0.15,
-    hitstopZoom: HAZARD_HITSTOP_DURATION,
     haptic: 'hazardHit',
   };
 }
@@ -122,9 +120,6 @@ export function handleHazardZoneCollision(player: Player, arena: Arena, movement
     px: player.x + player.width / 2,
     py: player.y + player.height / 2,
     hazardType: hz.type,
-    screenShake: 0.25,
-    screenFlash: 0.06,
-    hitstopZoom: HAZARD_HITSTOP_DURATION,
     haptic: 'hazardHit',
   };
 }
@@ -152,9 +147,6 @@ export function handleGhostCollision(player: Player, state: MatchState, movement
     type: 'ghost',
     px: player.x + player.width / 2,
     py: player.y + player.height / 2,
-    screenShake: 0.2,
-    screenFlash: 0.06,
-    hitstopZoom: HAZARD_HITSTOP_DURATION,
   };
 }
 
@@ -182,8 +174,6 @@ export function handleLavaRockCollision(player: Player, state: MatchState, movem
     type: 'lavaRock',
     px: player.x + player.width / 2,
     py: player.y + player.height / 2,
-    screenShake: 0.2,
-    hitstopZoom: HAZARD_HITSTOP_DURATION,
     haptic: 'hazardHit',
   };
 }

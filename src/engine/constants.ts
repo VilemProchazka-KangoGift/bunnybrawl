@@ -67,6 +67,9 @@ export const SCREEN_SHAKE_INTENSITY = 6; // pixels
 export const SLOW_MO_DURATION = 1.0; // seconds for final kill slow-mo
 export const SLOW_MO_FACTOR = 0.25; // time scale during slow-mo
 export const HITSTOP_DURATION = 0.12;  // ~7 frames at 60fps — per-player physics freeze on kill
+export const KILL_CAMERA_ZOOM = 0.01;
+export const KILL_CAMERA_KICK = 5;
+export const KILL_CAMERA_DURATION = 0.18;
 export const HITSTOP_ZOOM = 0.03;      // 3% camera zoom punch during hitstop
 export const HAZARD_HITSTOP_DURATION = HITSTOP_DURATION * 0.5; // ~3.5 frames — brief freeze on hazard hits
 
@@ -100,6 +103,7 @@ export const SHOCKWAVE_DURATION = 0.4;
 
 // Screen flash
 export const SCREEN_FLASH_DURATION = 0.15;
+export const GAMEPLAY_SCREEN_FLASH_DURATION = 0.06;
 
 // Spring trail
 export const SPRING_TRAIL_DURATION = 0.35;

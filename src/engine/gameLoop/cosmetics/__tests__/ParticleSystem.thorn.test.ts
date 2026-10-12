@@ -53,10 +53,10 @@ describe('ParticleSystem.applyHazardHitVFX — thorn', () => {
     expect(particles).toHaveLength(0);
   });
 
-  it('boosts screen flash to at least 0.18', () => {
+  it('does not add a screen flash on thorn contact', () => {
     const hit: HazardHitResult = { type: 'thorn', px: 100, py: 200, sx: 100, sy: 215 };
     ps.applyHazardHitVFX(hit, 'P1', state, false);
-    expect(state.screenFlash).toBeGreaterThanOrEqual(0.18);
+    expect(state.screenFlash).toBe(0);
   });
 
   it('does not add a new screen flash while replaying a hit', () => {

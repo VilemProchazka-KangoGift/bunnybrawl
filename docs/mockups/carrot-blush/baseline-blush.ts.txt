@@ -1,0 +1,12 @@
+function drawCurrentBlush(ctx,player,nearCarrot){const {x,y,width,height,state}=player;const cx=x+width/2;
+  if (nearCarrot && state !== 'splat') {
+    ctx.fillStyle = 'rgba(255, 150, 180, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(cx - 8, y + height * 0.52, 4, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx + 10, y + height * 0.52, 4, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+}

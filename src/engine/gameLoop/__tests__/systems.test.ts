@@ -275,14 +275,14 @@ describe('ParticleSystem', () => {
     );
   }
 
-  it('thorn hits emit one stationary cartoon jolt and retain the impact flash', () => {
+  it('thorn hits retain the cartoon jolt without a screen flash', () => {
     const state = makeSystemState();
     const sys = makeParticleSystem(state);
     sys.applyHazardHitVFX({type:'thorn',px:100,py:200,sx:100,sy:216},'P1',state,false);
     const particles = sys.getParticles();
     expect(particles).toHaveLength(1);
     expect(particles[0]).toMatchObject({shape:'thornJolt',x:100,y:200,vx:0,vy:0,life:.48});
-    expect(state.screenFlash).toBeGreaterThanOrEqual(.18);
+    expect(state.screenFlash).toBe(0);
   });
 
   it('init() is a no-op', () => {
@@ -454,6 +454,7 @@ describe('PlayerTransitionSystem', () => {
     // Score animation still pushed (used for the floating "+2" text).
     expect(state.scoreAnimations.length).toBe(1);
     expect(state.scoreAnimations[0].value).toBe(2);
+    expect(state.screenFlash).toBe(.06);
   });
 
   it('fatTimer 0 → positive (carrot pickup) DOES fire crunch + animal + VFX', () => {
@@ -471,6 +472,24 @@ describe('PlayerTransitionSystem', () => {
     expect(playAnimal).toHaveBeenCalled();
     expect(state.scoreAnimations.length).toBe(1);
     expect(state.scoreAnimations[0].value).toBe(1);
+    expect(state.screenFlash).toBe(.06);
+  });
+
+  it('score feedback preserves stronger flashes and does not replay after baseline reset', () => {
+    const player = makePlayer({ id: 'P1', state: 'idle', score: 0 });
+    const state = makeSystemState({ players: [player], screenFlash: .15 });
+    const { sys } = makePlayerTransitionSystem(state);
+    sys.init();
+    player.score = 2;
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.screenFlash).toBe(.15);
+    state.screenFlash = 0;
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.screenFlash).toBe(0);
+    player.score = 10;
+    sys.resetBaseline();
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.screenFlash).toBe(0);
   });
 
   it('resetBaseline() suppresses spurious jump SFX after a state jump', () => {

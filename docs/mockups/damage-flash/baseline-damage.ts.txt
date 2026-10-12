@@ -1,0 +1,8 @@
+function drawCurrentDamage(ctx,player){const {x,y,width,height}=player;
+  if (player.burnTimer <= 0 && player.damageFlashTimer > 0 && player.damageFlashSide) {
+    const flashAlpha = Math.min(0.5, player.damageFlashTimer * 3);
+    const flashX = player.damageFlashSide === 'left' ? x : x + width - 4;
+    ctx.fillStyle = `rgba(255, 0, 0, ${flashAlpha})`;
+    ctx.fillRect(flashX, y, 4, height);
+  }
+}

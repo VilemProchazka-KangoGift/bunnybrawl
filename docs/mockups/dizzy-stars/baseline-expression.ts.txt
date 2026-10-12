@@ -1,0 +1,54 @@
+export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): void {
+  const expression = player.expression;
+  if (!expression || expression === 'normal') return;
+
+  const { x, y, width, height } = player;
+  const cx = x + width / 2;
+  const isRunning = player.state === 'run';
+  const bounce = isRunning ? Math.sin(player.animFrame * Math.PI / 2) * 2 : 0;
+  const yOff = y - bounce;
+
+  if (expression === 'angry') {
+    const pack = getCharacterPack(player.character.name);
+    // Whole-body authored poses carry their own face. The generic overlay
+    // uses fixed coordinates and drifts across the Bunny's changing head.
+    if (pack?.authoredAngryBrows) return;
+    const anchor = pack?.eyebrowAnchor ?? DEFAULT_EYEBROW_ANCHOR;
+    ctx.strokeStyle = 'rgba(200, 40, 40, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + anchor.leftOuter.x, yOff + anchor.leftOuter.y);
+    ctx.lineTo(cx + anchor.leftInner.x, yOff + anchor.leftInner.y);
+    ctx.moveTo(cx + anchor.rightOuter.x, yOff + anchor.rightOuter.y);
+    ctx.lineTo(cx + anchor.rightInner.x, yOff + anchor.rightInner.y);
+    ctx.stroke();
+  } else if (expression === 'scared') {
+    // Sweat drop on the side of the head
+    ctx.fillStyle = 'rgba(100, 180, 255, 0.7)';
+    ctx.beginPath();
+    // Teardrop shape
+    ctx.moveTo(cx + width * 0.35, yOff + height * 0.2);
+    ctx.quadraticCurveTo(cx + width * 0.42, yOff + height * 0.3, cx + width * 0.35, yOff + height * 0.35);
+    ctx.quadraticCurveTo(cx + width * 0.28, yOff + height * 0.3, cx + width * 0.35, yOff + height * 0.2);
+    ctx.fill();
+  } else if (expression === 'dizzy') {
+    // 3 small yellow stars circling above the head
+    const now = frameTime / 1000;
+    ctx.fillStyle = '#FFD700';
+    for (let i = 0; i < 3; i++) {
+      const angle = now * 3 + (i * Math.PI * 2 / 3);
+      const starX = cx + Math.cos(angle) * 12;
+      const starY = yOff - 4 + Math.sin(angle) * 5;
+      // Draw small 4-point star
+      ctx.beginPath();
+      for (let p = 0; p < 4; p++) {
+        const sa = (p / 4) * Math.PI * 2 - Math.PI / 2;
+        const saInner = sa + Math.PI / 4;
+        ctx.lineTo(starX + Math.cos(sa) * 3, starY + Math.sin(sa) * 3);
+        ctx.lineTo(starX + Math.cos(saInner) * 1.2, starY + Math.sin(saInner) * 1.2);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}

@@ -120,3 +120,10 @@ Renderer-owned `CeilingSquash` anticipates an upward approach within eight logic
 ## Victory winner camera
 
 Keep existing fireworks. Renderer-owned VictoryCamera eases to 2.2x over 3000ms, targets winner body center and clamps to arena bounds. Compose background/night/foreground before zoom, transform the separate emitter layer identically, and draw HUD afterward. Reset on live match, missing/new winner, backward clock and theme change. Local/online natural results wait VICTORY_PRESENTATION_MS (4500); draws keep 1500ms. Worker renderer diagnostics are placeholders: verify camera math in unit tests and actual worker frames in screenshots. Quit-timer tests must advance past the longer delay.
+
+### Kill camera comparisons
+Use the production Renderer and ParticleSystem to hold splat, gore/confetti, shockwave and score flash constant while comparing camera changes. Current transforms the foreground; its static background and separate HUD stay fixed. Seed shake per sample for repeatable timing and compare center plus both arena edges. Clamp an impact-centered zoom anchor to arena bounds. A scripted renderer study does not prove live physics, worker transport or multiplayer behavior.
+
+Selected kill camera: Directional kick, 1% quadratic zoom over 0.12s and 5px sine kick/rebound over 0.18s. Follow new kill-feed entries in the renderer, priming existing history without replay. Remove stomp writes to generic screenShake/hitstopZoom; retain per-player freeze and hazard camera feedback. Check both worker modes because renderer-only frames receive transported state.
+
+Selected No camera movement for thorn, lava-zone, ghost and lava-rock contact: omit screenShake/hitstopZoom requests from collision results. Preserve local poses, knockback, damage/slow/burn feedback, per-player hitstop and haptics; the selected kill camera remains independent.

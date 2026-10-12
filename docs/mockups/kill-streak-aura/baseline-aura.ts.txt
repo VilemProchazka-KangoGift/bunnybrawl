@@ -1,0 +1,25 @@
+const KILL_STREAK_FLAME_COLORS = [
+  'rgba(255, 100, 0, 0.3)',
+  'rgba(255, 60, 0, 0.25)',
+  'rgba(255, 200, 0, 0.2)',
+  'rgba(255, 0, 0, 0.2)',
+] as const;
+
+
+function drawCurrentAura(ctx,player,now){const {x,y,width,height}=player;const cx=x+width/2;const frameTime=now*1000;
+
+  if (true) {
+    const now = frameTime / 1000;
+    for (let i = 0; i < 4; i++) {
+      const angle = now * 3 + i * 1.5;
+      const flameX = cx + Math.sin(angle) * 8;
+      const flameY = y + height * 0.3 + Math.cos(angle * 1.3) * 4;
+      const flameR = 8 + Math.sin(angle * 2) * 3;
+      ctx.fillStyle = KILL_STREAK_FLAME_COLORS[i];
+      ctx.beginPath();
+      ctx.arc(flameX, flameY, flameR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+}

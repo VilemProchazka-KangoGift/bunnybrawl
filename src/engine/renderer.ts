@@ -1,10 +1,11 @@
 import { drawShieldSparks } from './rendering/protectionEffects';
 import { drawSpeedCloud } from './rendering/movementEffects';
+import { KillCamera } from './rendering/killCamera';
 import { VictoryCamera } from './rendering/victoryCamera';
 import { ThornRecoil } from './rendering/thornRecoil';
 import { CeilingSquash } from './rendering/ceilingSquash';
 import { BumpRecoil } from './rendering/bumpRecoil';
-import type { Arena, MatchState, Particle, Platform, Player, PlayerSlot, Gib, Ctx2D } from './types';
+import type { Arena, MatchState, Particle, Platform, Player, Gib, Ctx2D } from './types';
 import type { ThemeConfig } from './themes/types';
 import { aabbOverlap } from './physics';
 import {
@@ -64,7 +65,6 @@ interface Cloud {
   speed: number;
 }
 
-const _nearCarrotSet = new Set<PlayerSlot>();
 const _isoOccluders: Platform[] = [];
 
 /** Memoized hex→HSL for character colors. Bounded by character pack count (≤17). */
@@ -324,6 +324,7 @@ function resetDiag(d: RenderDiagnostics): void {
 
 export class Renderer implements IRenderer {
   private victoryCamera = new VictoryCamera();
+  private killCamera = new KillCamera();
   private victoryScene: OffscreenCanvas | null = null;
   private bgCanvas: RendererCanvas;
   private bgNightCanvas: RendererCanvas | null = null;
@@ -594,6 +595,7 @@ export class Renderer implements IRenderer {
    *  includes a bubble-helmet bit, so cross-arena sprite reuse is safe). */
   setTheme(theme: ThemeConfig): void {
     this.victoryCamera.clear();
+    this.killCamera.clear();
     this.theme = theme;
     this.initClouds();
     clearArenaCaches();
@@ -1186,6 +1188,16 @@ export class Renderer implements IRenderer {
 
       ctx.save();
 
+      const killCamera = this.killCamera.frame(matchState, this.frameTime);
+      if (killCamera) {
+        d.hitstop = killCamera.scale > 1;
+        d.screenShake = true;
+        ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+        ctx.scale(killCamera.scale, killCamera.scale);
+        ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
+        ctx.translate(0, killCamera.y);
+      }
+
       // Hitstop zoom punch -- subtle scale centered on screen
       if (matchState.hitstopZoom > 0) {
         d.hitstop = true;
@@ -1358,24 +1370,6 @@ export class Renderer implements IRenderer {
       perfTrace.end('render.afterimages', aiStart);
 
       const playersStart = perfTrace.begin('render.players');
-      // Compute which players are near a carrot (c) for blush
-      _nearCarrotSet.clear();
-      const nearCarrotSet = _nearCarrotSet;
-      for (const player of matchState.players) {
-        if (!player.active || player.state === 'respawning') continue;
-        const pcx = player.x + player.width / 2;
-        const pcy = player.y + player.height / 2;
-        for (const carrot of matchState.carrots) {
-          if (!carrot.active) continue;
-          const dx = pcx - carrot.x;
-          const dy = pcy - carrot.y;
-          if (dx * dx + dy * dy < 10000) {
-            nearCarrotSet.add(player.id);
-            break;
-          }
-        }
-      }
-
       // Players (iso clip applied when applicable — see findIsoOccluders).
       const useIsoClip = this._arenaHasIsoOccluders;
       const isoPlatforms = this._isoOccluderPlatforms;
@@ -1397,7 +1391,7 @@ export class Renderer implements IRenderer {
           for (const plat of occluders!) addIsoPlatformPath(ctx, plat);
           ctx.clip('evenodd');
         }
-        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime, this.bumpRecoil.offset(player, matchState.players, this.frameTime), ceilingPulse, thornPulse, entrancePulse);
+        drawPlayer(ctx, player, this.theme, this.frameTime, this.bumpRecoil.offset(player, matchState.players, this.frameTime), ceilingPulse, thornPulse, entrancePulse);
         if (clipped) ctx.restore();
         d.playersDrawn++;
       }

@@ -1,5 +1,5 @@
 import type { Player, PlayerState, MatchState } from '../../types';
-import { DUST_LAND_VY_THRESHOLD, SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION, SCORE_ANIM_DURATION } from '../../constants';
+import { GAMEPLAY_SCREEN_FLASH_DURATION, DUST_LAND_VY_THRESHOLD, SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION, SCORE_ANIM_DURATION } from '../../constants';
 import { haptics } from '../../haptics';
 import type { PlayerSfxCooldowns } from './sfx';
 
@@ -137,6 +137,7 @@ export function detectPlayerTransitions(
 
   // Score change → score animation (any source: carrot, stomp kill, etc.)
   if (player.score > prev.score) {
+    state.screenFlash = Math.max(state.screenFlash, GAMEPLAY_SCREEN_FLASH_DURATION);
     state.scoreAnimations.push({ playerId: player.id, value: player.score - prev.score, timer: SCORE_ANIM_DURATION });
   }
 
