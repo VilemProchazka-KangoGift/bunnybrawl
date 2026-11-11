@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const directory = dirname(fileURLToPath(import.meta.url));
-const names = ['shield-spears', 'sword-mace-rack', 'trophy-shelf', 'tournament-pennant'];
+const names = ['shield-spears', 'sword-mace-rack', 'trophy-shelf', 'tournament-pennant', 'trophy-plaque', 'trophy-niche'];
 const sources = Object.fromEntries(await Promise.all(names.map(async name => [
   name, (await readFile(join(directory, 'sources', `${name}.png`))).toString('base64'),
 ])));
@@ -47,6 +47,10 @@ try {
       'c-trophy-shelf': [['trophy-shelf', 328, 560, 90], ['trophy-shelf', 952, 560, 90, true]],
       'd-tournament-pennant': [['tournament-pennant', 328, 565, 116], ['tournament-pennant', 952, 565, 116, true]],
       'e-asymmetric-armory': [['shield-spears', 328, 576, 110], ['sword-mace-rack', 952, 574, 106, true]],
+      'f-trophy-plaque': [['trophy-plaque', 328, 565, 104], ['trophy-plaque', 952, 565, 104, true]],
+      'g-trophy-niche': [['trophy-niche', 328, 565, 104], ['trophy-niche', 952, 565, 104, true]],
+      'h-armory-pennant': [['shield-spears', 328, 576, 110], ['tournament-pennant', 952, 565, 116, true]],
+      'i-plaque-armory': [['trophy-plaque', 328, 565, 104], ['sword-mace-rack', 952, 574, 106, true]],
     };
     const output = {};
     for (const [name, placements] of Object.entries(variants)) {
