@@ -10,12 +10,13 @@ const inputs = [
   'castle-guard-cartoon', 'castle-sconce-cartoon', 'castle-chandelier-cartoon', 'castle-column-cartoon',
   'castle-guardian-rest', 'castle-guardian-compressed',
 ];
+const selected = process.argv.slice(2);
 const browser = await chromium.launch(process.env.CASTLE_PROPS_BROWSER
   ? { executablePath: process.env.CASTLE_PROPS_BROWSER }
   : {});
 try {
   const page = await browser.newPage();
-  for (const name of inputs) {
+  for (const name of selected.length ? selected : inputs) {
     const source = await readFile(join(assets, `${name}.webp`));
     const result = await page.evaluate(async ({ base64, backdrop }) => {
       const image = new Image();

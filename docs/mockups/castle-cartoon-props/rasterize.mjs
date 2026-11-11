@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const output = join(directory, '..', '..', '..', 'src', 'engine', 'arenas', 'assets');
+const names = process.argv.slice(2);
 const browser = await chromium.launch(process.env.CASTLE_PROPS_BROWSER ? { executablePath: process.env.CASTLE_PROPS_BROWSER } : {});
 try {
   const page = await browser.newPage();
-  for (const name of ['guard', 'sconce', 'chandelier', 'column']) {
+  for (const name of names.length ? names : ['guard', 'sconce', 'chandelier', 'column']) {
     const svg = await readFile(join(directory, 'svg', `${name}.svg`), 'utf8');
     const data = await page.evaluate(async source => {
       const image = new Image();

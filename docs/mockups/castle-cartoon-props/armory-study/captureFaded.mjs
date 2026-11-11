@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const base = process.env.CASTLE_PROPS_URL ?? 'http://127.0.0.1:4284/bunnybrawl/';
+const outputDirectory = process.env.CASTLE_CAPTURE_DIR ?? directory;
+const prefix = process.env.CASTLE_CAPTURE_PREFIX ?? 'faded-live';
 const browser = await chromium.launch(process.env.CASTLE_PROPS_BROWSER
   ? { executablePath: process.env.CASTLE_PROPS_BROWSER }
   : {});
@@ -16,7 +18,7 @@ try {
     await page.getByTestId('game-canvas').waitFor({ timeout: 30000 });
     await page.waitForTimeout(4200);
     if (errors.length) throw new Error(`${label}: ${errors.join(' | ')}`);
-    await page.screenshot({ path: join(directory, `faded-live-${label}.png`) });
+    await page.screenshot({ path: join(outputDirectory, `${prefix}-${label}.png`) });
     await page.close();
     console.log(`Captured faded Castle scene: ${label}`);
   }
