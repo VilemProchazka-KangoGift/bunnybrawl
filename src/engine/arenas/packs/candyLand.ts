@@ -543,19 +543,17 @@ export const candyLand: ArenaPack = {
 
   drawWeatherParticle: (ctx, w) => {
     if (w.type === 'sprinkle') {
-      // Sprinkle is a rotated rectangle with rounded ends — needs the
-      // transform stack because fillRect doesn't accept rotation.
       ctx.save();
       ctx.translate(w.x, w.y);
       ctx.rotate(w.rotation);
-      ctx.fillStyle = SPRINKLE_COLORS[Math.floor(w.x * 0.1) % SPRINKLE_COLORS.length];
-      ctx.fillRect(-w.size, -w.size * 0.3, w.size * 2, w.size * 0.6);
+      const r = w.size;
+      ctx.strokeStyle = SPRINKLE_COLORS[Math.floor(w.x * 0.1) % SPRINKLE_COLORS.length];
+      ctx.lineWidth = r * 0.48;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.arc(-w.size, 0, w.size * 0.3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(w.size, 0, w.size * 0.3, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(-r * 0.92, r * 0.23);
+      ctx.bezierCurveTo(-r * 0.25, -r * 0.9, r * 0.25, r * 0.91, r * 0.92, -r * 0.23);
+      ctx.stroke();
       ctx.restore();
     } else {
       // Sugar petal
