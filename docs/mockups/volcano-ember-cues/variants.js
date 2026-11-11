@@ -1,3 +1,26 @@
+import {drawDimCinder} from '../../../src/engine/rendering/dimCinder.ts';
+function drawOriginalGlow(ctx,w){
+      // Embers are circles — rotation has no visual effect, so skip the
+      // save/translate/rotate/restore canvas-state dance and draw directly
+      // at world coords. The arc primitive accepts a center, so this is
+      // exactly equivalent visually.
+      const x = w.x, y = w.y, s = w.size;
+      const color = w.color || '#FF6B00';
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFCC00';
+      ctx.beginPath();
+      ctx.arc(x, y, s * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, s * 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+}
 const wrap=(v,max)=>((v%max)+max)%max;
 export function weatherAt(t){
   return Array.from({length:40},(_,i)=>{
@@ -8,7 +31,9 @@ export function weatherAt(t){
 }
 export function drawCue(c,weather,variant,theme){
   for(const w of weather){
-    if(w.type!=='ember'||variant===0){theme.drawWeatherParticle(c,w);continue;}
+    if(w.type!=='ember'){theme.drawWeatherParticle(c,w);continue;}
+    if(variant===0){drawOriginalGlow(c,w);continue;}
+    if(variant===2){drawDimCinder(c,w);continue;}
     if(variant===3)continue;
     c.save();c.translate(w.x,w.y);const r=w.size;
     if(variant===1){
@@ -16,9 +41,19 @@ export function drawCue(c,weather,variant,theme){
       c.fillStyle='rgba(245,82,35,.75)';
       c.beginPath();c.moveTo(-r*2.2,0);c.quadraticCurveTo(0,-r*.9,r*.7,-r*.45);c.quadraticCurveTo(r*1.5,0,r*.7,r*.45);c.quadraticCurveTo(0,r*.9,-r*2.2,0);c.fill();
       c.fillStyle='#ffe09a';c.beginPath();c.ellipse(r*.38,0,r*.56,r*.29,0,0,Math.PI*2);c.fill();
-    }else{
-      c.rotate(w.rotation);c.fillStyle='rgba(153,63,48,.68)';c.beginPath();c.moveTo(-r*.82,-r*.15);c.lineTo(-r*.15,-r*.63);c.lineTo(r*.74,-r*.3);c.lineTo(r*.58,r*.36);c.lineTo(-r*.36,r*.55);c.closePath();c.fill();
-      c.fillStyle='rgba(255,153,86,.78)';c.beginPath();c.ellipse(-r*.02,-r*.14,r*.33,r*.19,0,0,Math.PI*2);c.fill();
+    }else if(variant>=4){
+      c.rotate(w.rotation);c.scale(r,r);
+      if(variant===4){
+        c.fillStyle='rgba(91,55,53,.86)';c.beginPath();c.moveTo(-.86,-.27);c.lineTo(-.18,-.69);c.lineTo(.61,-.46);c.lineTo(.78,.17);c.lineTo(.25,.64);c.lineTo(-.63,.46);c.closePath();c.fill();
+        c.strokeStyle='rgba(239,131,76,.82)';c.lineWidth=.18;c.beginPath();c.moveTo(-.49,-.24);c.lineTo(-.14,.03);c.lineTo(.05,-.19);c.lineTo(.45,.24);c.stroke();
+      }else if(variant===5){
+        c.fillStyle='rgba(116,62,53,.8)';c.beginPath();c.moveTo(-1.13,.33);c.lineTo(.05,-.61);c.lineTo(.98,-.14);c.lineTo(.39,.45);c.closePath();c.fill();
+        c.strokeStyle='rgba(255,159,103,.78)';c.lineWidth=.16;c.beginPath();c.moveTo(-.68,.03);c.lineTo(.05,-.61);c.lineTo(.69,-.29);c.stroke();
+      }else{
+        c.fillStyle='rgba(127,71,60,.72)';c.beginPath();c.ellipse(-.14,0,.68,.49,.25,0,Math.PI*2);c.fill();
+        c.fillStyle='rgba(233,142,91,.76)';c.beginPath();c.arc(-.23,-.13,.2,0,Math.PI*2);c.fill();
+        c.fillStyle='rgba(178,101,76,.65)';c.beginPath();c.arc(.65,-.24,.18,0,Math.PI*2);c.moveTo(.61,.38);c.arc(.49,.38,.12,0,Math.PI*2);c.fill();
+      }
     }
     c.restore();
   }

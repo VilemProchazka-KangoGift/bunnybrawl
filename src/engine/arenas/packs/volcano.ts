@@ -1,3 +1,4 @@
+import { drawDimCinder } from '../../rendering/dimCinder';
 import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
@@ -627,26 +628,7 @@ export const volcano: ArenaPack = {
 
   drawWeatherParticle: (ctx: Ctx2D, w: WeatherParticle) => {
     if (w.type === 'ember') {
-      // Embers are circles — rotation has no visual effect, so skip the
-      // save/translate/rotate/restore canvas-state dance and draw directly
-      // at world coords. The arc primitive accepts a center, so this is
-      // exactly equivalent visually.
-      const x = w.x, y = w.y, s = w.size;
-      const color = w.color || '#FF6B00';
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, y, s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#FFCC00';
-      ctx.beginPath();
-      ctx.arc(x, y, s * 0.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.3;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, y, s * 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      drawDimCinder(ctx, w);
     } else {
       // Ash — asymmetric ellipse
       ctx.fillStyle = w.color || 'rgba(120, 100, 90, 0.5)';
