@@ -1,3 +1,4 @@
+import { drawRoundedButterfly } from './roundedButterfly';
 import { drawInkLeaf } from './leafEffects';
 import { drawBurnCough } from './burnEffects';
 import { drawRespawnEntrance } from './respawnEffects';
@@ -285,12 +286,16 @@ export function drawFireworks(ctx: Ctx2D, particles: Particle[], frameTime: numb
   ctx.globalAlpha = 1;
 }
 
-export function drawWildlife(ctx: Ctx2D, wildlife: WildlifeEntity[]): void {
+export function drawWildlife(ctx: Ctx2D, wildlife: WildlifeEntity[], roundedButterflyWings = false): void {
   for (const w of wildlife) {
     const cx = w.x;
     const cy = w.y;
 
     if (w.type === 'butterfly') {
+      if (roundedButterflyWings) {
+        drawRoundedButterfly(ctx, w);
+        continue;
+      }
       const wingAngle = Math.sin(w.wingPhase) * 0.6;
       const wcos = Math.cos(wingAngle);
       const wsin = Math.abs(Math.sin(wingAngle));

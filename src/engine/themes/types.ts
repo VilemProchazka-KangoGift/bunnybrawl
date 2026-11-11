@@ -49,6 +49,7 @@ export interface WildlifeTypeConfig {
 }
 
 export interface WildlifeConfig {
+  roundedButterflyWings?: boolean;
   count: number;
   types: WildlifeTypeConfig[];
 }

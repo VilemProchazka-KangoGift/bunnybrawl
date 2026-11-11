@@ -1,3 +1,4 @@
+import {drawRoundedButterfly} from '../../../src/engine/rendering/roundedButterfly.ts';
 import {drawWildlife} from '../../../src/engine/rendering/particles.ts';
 export function flightAt(t){
  return Array.from({length:6},(_,i)=>{
@@ -9,6 +10,7 @@ export function drawCue(c,flight,variant,size=1){
  for(const w of flight){
   if(w.type==='bird'){drawWildlife(c,[w]);continue;}
   if(variant===3)continue;
+  if(variant===1){drawRoundedButterfly(c,w,size);continue;}
   c.save();c.translate(w.x,w.y);c.scale(size,size);
   if(variant===0){drawWildlife(c,[{...w,x:0,y:0}]);c.restore();continue;}
   const width=.52+.48*Math.abs(Math.sin(w.wingPhase));

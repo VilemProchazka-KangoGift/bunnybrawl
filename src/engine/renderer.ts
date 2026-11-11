@@ -1256,7 +1256,7 @@ export class Renderer implements IRenderer {
 
       // Wildlife: butterflies + birds (q) -- drawn after clouds/weather, before springs
       if (!slow && matchState.wildlife) {
-        drawWildlife(ctx, matchState.wildlife);
+        drawWildlife(ctx, matchState.wildlife, this.theme.wildlife?.roundedButterflyWings);
         d.wildlife = true;
       }
 

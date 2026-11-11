@@ -65,6 +65,7 @@ export const lobby: ArenaPack = {
   },
 
   wildlife: {
+    roundedButterflyWings: true,
     count: 6,
     types: [
       { type: 'butterfly', weight: 0.7, colors: ['#FFD700', '#FF69B4', '#87CEEB', '#DDA0DD', '#FFA07A'], speedRange: [15, 30], yRange: [0.2, 0.8] },
