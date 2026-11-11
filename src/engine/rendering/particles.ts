@@ -1,3 +1,4 @@
+import { drawNotchedPetal } from './petalEffects';
 import { drawInkLeaf } from './leafEffects';
 import { drawBurnCough } from './burnEffects';
 import { drawRespawnEntrance } from './respawnEffects';
@@ -54,10 +55,7 @@ export function drawWeather(ctx: Ctx2D, weather: WeatherParticle[], theme: Theme
     } else if (w.type === 'leaf') {
       drawInkLeaf(ctx, w, lead);
     } else if (w.type === 'petal') {
-      ctx.fillStyle = 'rgba(255, 180, 200, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(px, py, w.size, w.size * 0.6, w.rotation + w.rotSpeed * lead, 0, Math.PI * 2);
-      ctx.fill();
+      drawNotchedPetal(ctx, w, lead);
     } else if (w.type === 'ash') {
       ctx.fillStyle = w.color || 'rgba(150, 150, 150, 0.4)';
       ctx.beginPath();

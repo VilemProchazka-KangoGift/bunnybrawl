@@ -1,3 +1,4 @@
+import {drawNotchedPetal} from '../../../src/engine/rendering/petalEffects.ts';
 import {drawWeather} from '../../../src/engine/rendering/particles.ts';
 export function weatherAt(t){
   return Array.from({length:30},(_,i)=>{
@@ -8,17 +9,18 @@ export function weatherAt(t){
 }
 export function drawCue(c,weather,variant,theme){
   for(const w of weather){
-    if(w.type!=='petal'||variant===0){drawWeather(c,[w],theme);continue;}
+    if(w.type!=='petal'){drawWeather(c,[w],theme);continue;}
+    if(variant===0){c.save();c.fillStyle='rgba(255, 180, 200, 0.35)';c.beginPath();c.ellipse(w.x,w.y,w.size,w.size*.6,w.rotation,0,Math.PI*2);c.fill();c.restore();continue;}
+    if(variant===1){drawNotchedPetal(c,w);continue;}
     if(variant===3)continue;
-    c.save();c.translate(w.x,w.y);c.rotate(w.rotation);c.globalAlpha=variant===1?.45:.5;
-    const r=w.size;c.fillStyle='#e9a8b8';c.strokeStyle='#995b73';c.lineWidth=.55;
-    c.beginPath();c.moveTo(-r,0);
-    c.bezierCurveTo(-r*.7,-r*.75,r*.45,-r*.9,r,0);
-    c.bezierCurveTo(r*.5,r*.7,-r*.7,r*.4,-r,0);c.fill();
-    if(variant===2)c.stroke();
-    c.fillStyle='#f9d6db';c.beginPath();c.moveTo(-r*.8,0);
-    c.quadraticCurveTo(-r*.1,-r*.65,r*.7,-r*.1);c.quadraticCurveTo(0,-r*.05,-r*.8,0);c.fill();
-    c.fillStyle='#c9829c';c.beginPath();c.moveTo(-r*.3,r*.1);c.quadraticCurveTo(r*.45,-r*.1,r,0);c.quadraticCurveTo(r*.25,r*.55,-r*.3,r*.1);c.fill();
+    c.save();c.translate(w.x,w.y);c.rotate(w.rotation);
+    const r=w.size;
+      // A narrow folded petal: pointed ends and a darker underside.
+      c.globalAlpha=.75;c.fillStyle='#e68aa8';c.strokeStyle='#814963';c.lineWidth=.6;
+      c.beginPath();c.moveTo(-r,0);c.quadraticCurveTo(-r*.13,-r*.74,r,0);
+      c.quadraticCurveTo(r*.17,r*.54,-r,0);c.closePath();c.fill();c.stroke();
+      c.fillStyle='#aa5978';c.beginPath();c.moveTo(-r,0);c.quadraticCurveTo(r*.19,r*.16,r,0);
+      c.quadraticCurveTo(r*.17,r*.54,-r,0);c.fill();
     c.restore();
   }
 }
