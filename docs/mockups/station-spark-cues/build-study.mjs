@@ -1,0 +1,1 @@
+import {build} from 'vite';await build({configFile:false,base:'/bunnybrawl/',define:{__BUILD_TIME__:JSON.stringify('study')},build:{outDir:'test-results/station-spark-static',emptyOutDir:true,rolldownOptions:{input:'docs/mockups/station-spark-cues/index.html'}}});
