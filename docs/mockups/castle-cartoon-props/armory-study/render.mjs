@@ -11,13 +11,14 @@ const sources = Object.fromEntries(await Promise.all([
   ...simpleNames.map(async name => [name, `data:image/svg+xml;base64,${(await readFile(join(directory, 'sources', `${name}.svg`))).toString('base64')}`]),
 ]));
 const baseline = (await readFile(join(directory, 'baseline-no-portraits.png'))).toString('base64');
+const fadedBaseline = (await readFile(join(directory, 'faded-live-default.png'))).toString('base64');
 const browser = await chromium.launch(process.env.CASTLE_PROPS_BROWSER
   ? { executablePath: process.env.CASTLE_PROPS_BROWSER }
   : {});
 
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
-  const renders = await page.evaluate(async ({ sources, baseline }) => {
+  const renders = await page.evaluate(async ({ sources, baseline, fadedBaseline }) => {
     const decode = async source => {
       const image = new Image();
       image.src = source;
@@ -25,18 +26,19 @@ try {
       return image;
     };
     const base = await decode(`data:image/png;base64,${baseline}`);
+    const fadedBase = await decode(`data:image/png;base64,${fadedBaseline}`);
     const art = Object.fromEntries(await Promise.all(Object.entries(sources).map(async ([name, bytes]) => [name, await decode(bytes)])));
     const canvas = document.createElement('canvas');
     canvas.width = 1280;
     canvas.height = 720;
     const ctx = canvas.getContext('2d');
-    const draw = (name, cx, bottom, height, flip = false) => {
+    const draw = (name, cx, bottom, height, flip = false, faded = false) => {
       const image = art[name];
       const width = height * image.naturalWidth / image.naturalHeight;
       ctx.save();
       ctx.translate(cx, bottom - height);
       if (flip) ctx.scale(-1, 1);
-      ctx.globalAlpha = name.startsWith('simple-') ? 1 : .91;
+      ctx.globalAlpha = faded ? .58 : name.startsWith('simple-') ? 1 : .91;
       ctx.filter = name.startsWith('simple-') ? 'none' : name === 'sword-mace-rack'
         ? 'saturate(.75) brightness(.94) contrast(1.04)'
         : 'saturate(.68) brightness(.82) contrast(1.04)';
@@ -63,8 +65,11 @@ try {
     const output = {};
     for (const [name, placements] of Object.entries(variants)) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(base, 0, 0);
-      for (const placement of placements) draw(...placement);
+      const faded = /^[j-o]-/.test(name);
+      ctx.drawImage(faded ? fadedBase : base, 0, 0);
+      for (const [asset, cx, bottom, height, flip] of placements) {
+        draw(asset, cx, bottom, height, flip ?? false, faded);
+      }
       output[`${name}.png`] = canvas.toDataURL('image/png').split(',')[1];
       const detail = document.createElement('canvas');
       detail.width = 390;
@@ -77,7 +82,7 @@ try {
       output[`detail-${name}.png`] = detail.toDataURL('image/png').split(',')[1];
     }
     return output;
-  }, { sources, baseline });
+  }, { sources, baseline, fadedBaseline });
   for (const [name, base64] of Object.entries(renders)) {
     await writeFile(join(directory, name), Buffer.from(base64, 'base64'));
     console.log(name);

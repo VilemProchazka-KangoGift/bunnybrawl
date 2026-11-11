@@ -28,9 +28,10 @@ export function drawCastleCartoonBackground(c: Ctx2D, arena: Arena): boolean {
   c.save();
   drawCastleWallDetails(c);
   if (upperGallery) drawCastleGalleryDecoration(c, upperGallery);
-  c.globalAlpha = .8;
+  // Passive wall fixtures sit below the contrast of players and playable stone.
+  c.globalAlpha = .65;
   for (const x of CASTLE_SCONCE_X) c.drawImage(art.sconce, x - 12, groundY - 140, 24, 39);
-  c.globalAlpha = .87;
+  c.globalAlpha = .62;
   if (upperGallery) {
     // Gallery sentries mark the long upper landing without crowding its center spawn.
     c.drawImage(art.guard, upperGallery.x + 62, upperGallery.y - 72, 52, 72);
@@ -45,6 +46,7 @@ export function drawCastleCartoonForeground(c: Ctx2D, _arena: Arena): boolean {
   if (!art) return false;
   // Extend the chain to the middle shelf so the lowered fixture still hangs from it.
   c.save();
+  c.globalAlpha = .58;
   c.strokeStyle = '#293446';
   c.lineWidth = 4;
   c.beginPath();
@@ -52,6 +54,9 @@ export function drawCastleCartoonForeground(c: Ctx2D, _arena: Arena): boolean {
   c.lineTo(640, 515);
   c.stroke();
   c.restore();
+  c.save();
+  c.globalAlpha = .58;
   c.drawImage(art.chandelier, 580, 511, 120, 69);
+  c.restore();
   return true;
 }

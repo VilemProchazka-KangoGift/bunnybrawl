@@ -194,6 +194,8 @@ registerReactiveKind('castle.banner', {
     const wide = 14;
     const drop = 35;
     ctx.save();
+    // This cloth decorates the stone rather than signaling an active object.
+    ctx.globalAlpha = .62;
     ctx.translate(bx, by);
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -211,13 +213,13 @@ registerReactiveKind('castle.banner', {
     ctx.quadraticCurveTo(-wide - 2 + sway * .15, 18, -wide + 2, 1);
     ctx.closePath(); ctx.fillStyle = '#574e85'; ctx.fill();
     ctx.strokeStyle = '#24273c'; ctx.lineWidth = 1.7; ctx.stroke();
-    ctx.globalAlpha = .5;
+    ctx.globalAlpha = .32;
     ctx.fillStyle = '#8581ab';
     ctx.beginPath();
     ctx.moveTo(-wide + 4, 4); ctx.lineTo(sway * .2, 5);
     ctx.lineTo(-2 + sway * .7, drop - 4); ctx.lineTo(-wide + 3 + sway, drop - 5);
     ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = .62;
     ctx.fillStyle = '#d7bb76';
     ctx.beginPath(); ctx.ellipse(sway * .25, 18, 5, 5, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#574e85';

@@ -1,10 +1,11 @@
 # Castle wall prop study
 
-The royal portraits were rejected and removed from the Castle draw and preload paths. This study tests four alternatives in the two empty lower wall bays. All images use the same 1280 × 720 production-renderer screenshot after the countdown, with the same characters, lighting, platforms and camera. The new props are **mockup overlays**, not implemented game art. Windows, collision and existing banners are unchanged.
+The royal portraits were rejected and removed from the Castle draw and preload paths. This study tests alternatives in the two empty lower wall bays. A–I use the original 1280 × 720 production-renderer screenshot; J–O use the later [subdued playable capture](faded-live-default.png) after the Castle decorations were faded. Each group shares its own background and camera. The wall props are **mockup overlays**, not implemented game art. Windows and collision are unchanged.
 
 | Direction | Full scene | Native-size detail | What it tests |
 | --- | --- | --- | --- |
 | Empty baseline | ![Castle without portraits](baseline-no-portraits.png) | — | The room after removing the portraits. |
+| Subdued live baseline | ![Playable Castle after passive decorations were faded](faded-live-default.png) | [Second worker mode](faded-live-simWorker-off.png) | Updated guards, sconces, chandelier and existing banners without new wall props. |
 | A · Shield and spears | ![Paired shield displays](a-shield-spears.png) | [Detail](detail-a-shield-spears.png) | Strong heraldic silhouettes; the spear tips may look hazardous. |
 | B · Swords and mace rack | ![Paired weapon racks](b-sword-mace-rack.png) | [Detail](detail-b-sword-mace-rack.png) | An armory identity with every weapon visibly fixed to a wall rack. Darker and busier at game size. |
 | C · Trophy shelf | ![Paired trophy shelves](c-trophy-shelf.png) | [Detail](detail-c-trophy-shelf.png) | A funny trophy and broken crown, but the horizontal shelf risks suggesting a usable ledge. |
@@ -34,3 +35,7 @@ F is clearer than G at match size, but the trophy theme remains optional. H comp
 After seeing F–I in the scene, the plaque and rack still had too much material rendering and interior detail. J–O are a deliberately much simpler comparison. Their [editable SVG sources](sources/simple-shield.svg) use large silhouettes, a dark contour, at most two broad fill planes, and one recognizable motif. The render script places them at the same wall-bay positions and leaves the previously liked pennant intact. The full scene matters here: a detailed prop can look attractive in a crop but compete with the players and platforms when seen at game size.
 
 **J and M are the strongest simplified options** because the shield stays readable and shares the pennants' purple and gold. The sword stand is more literal but weaker as decoration; the bare trophy is readable but currently looks like an emblem rather than a physical wall display. These are exploratory mockups, not selected runtime art. Earlier A–I remain in the table for comparison, not as current recommendations.
+
+## Background contrast pass
+
+The simplified props initially looked like foreground objects because their ink and colors were as strong as the playable stone and characters. J–O now composite at 58% opacity over a fresh production capture. The existing Castle guard art moved from 87% to 62% opacity, the sconce art from 80% to 65%, the chandelier to 58%, and the hanging banners to 62%; their interior shading is attenuated too. The [default worker](faded-live-default.png) and [`simWorker=off`](faded-live-simWorker-off.png) captures show the actual arena after this change. Keep the glassy moon backdrop, landing edges, players, spring and thorns at their existing contrast: those surfaces and objects carry gameplay information. The wall prop mockups remain unimplemented until one is chosen.
