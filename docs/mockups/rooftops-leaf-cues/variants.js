@@ -6,8 +6,9 @@ export function weatherAt(t){
 }
 export function drawCue(c,weather,variant,theme){
  for(const w of weather){
-  if(variant===0){theme.drawWeatherParticle(c,w);continue;}
+  if(variant===0){c.save();c.translate(w.x,w.y);c.rotate(w.rotation);c.fillStyle="rgba(200,190,170,.35)";c.fillRect(-w.size,-w.size*.4,w.size*2,w.size*.8);c.restore();continue;}
   if(variant===3)continue;
+  if(variant===4){theme.drawWeatherParticle(c,w);continue;}
   c.save();c.translate(w.x,w.y);c.rotate(w.rotation);const r=w.size;
   c.fillStyle=variant===1?'rgba(213,185,113,.72)':'rgba(179,126,66,.77)';
   c.beginPath();c.moveTo(-r,0);

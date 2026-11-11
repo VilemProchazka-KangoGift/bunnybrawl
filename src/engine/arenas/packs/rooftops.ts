@@ -1166,12 +1166,23 @@ export const rooftops: ArenaPack = {
 
   drawWeatherParticle: (ctx, w) => {
     if (w.type === 'leaf') {
-      // Leaves are rectangles — rotation visible.
       ctx.save();
       ctx.translate(w.x, w.y);
       ctx.rotate(w.rotation);
-      ctx.fillStyle = 'rgba(200, 190, 170, 0.35)';
-      ctx.fillRect(-w.size, -w.size * 0.4, w.size * 2, w.size * 0.8);
+      const r = w.size * 0.75;
+      ctx.fillStyle = 'rgba(171,102,73,.75)';
+      ctx.beginPath();
+      ctx.moveTo(-r, 0);
+      ctx.bezierCurveTo(-r * .3, -r * .87, r * .73, -r * .67, r, .03);
+      ctx.quadraticCurveTo(r * .37, r * .62, -r, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(224,173,118,.74)';
+      ctx.lineWidth = r * .13;
+      ctx.beginPath();
+      ctx.moveTo(-r * .83, 0);
+      ctx.quadraticCurveTo(0, -r * .18, r * .79, 0);
+      ctx.stroke();
       ctx.restore();
     } else {
       // Ash is a circle — rotation invisible, so draw at world coords
