@@ -1,3 +1,4 @@
+import { drawSoftSnowClump } from '../../rendering/snowClumps';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
@@ -7,7 +8,7 @@ import { getSlowDevice } from '../../perfFlags';
 import { getIllustratedBackdrop } from '../illustratedBackdropAsset';
 import { drawWinterVectorPlatformBack, drawWinterVectorPlatformFront } from './winterLakeVectorPlatforms';
 import { drawRoundGroveBackground, drawRoundGroveForeground } from './winterLakeRoundGroveProps';
-import { drawActionSnow, drawActionSpring, drawActionThorn, drawActionZone } from './winterActionArt';
+import { drawActionSpring, drawActionThorn, drawActionZone } from './winterActionArt';
 import { computeNightIntensity } from '../../rendering';
 import { bakeVerticalGradientStrip } from '../../themes/utils';
 import {
@@ -432,7 +433,7 @@ export const winterLake: ArenaPack = {
   drawCustomHazardZone: (ctx, x, y, width, height) =>
     drawActionZone(ctx, x, y, width, height, 'ink-bell'),
 
-  drawWeatherParticle: (ctx, particle) => drawActionSnow(ctx, particle, 'ink-bell'),
+  drawWeatherParticle: drawSoftSnowClump,
   // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],
