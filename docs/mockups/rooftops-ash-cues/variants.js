@@ -7,7 +7,8 @@ export function weatherAt(t){
 }
 export function drawCue(c,weather,variant,theme){
  for(const w of weather){
-  if(w.type!=='ash'||variant===0){theme.drawWeatherParticle(c,w);continue;}
+  if(w.type!=='ash'){theme.drawWeatherParticle(c,w);continue;}
+  if(variant===0){c.fillStyle=w.color||'rgba(200,190,180,.4)';c.beginPath();c.arc(w.x,w.y,w.size*.5,0,Math.PI*2);c.fill();continue;}
   if(variant===3)continue;
   c.save();c.translate(w.x,w.y);c.rotate(w.rotation);const r=w.size;
   if(variant===1){

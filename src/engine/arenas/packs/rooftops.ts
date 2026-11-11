@@ -685,10 +685,10 @@ export const rooftops: ArenaPack = {
   },
 
   weather: {
-    particleCount: 12,
+    // Keep roughly the same number of drifting leaves after removing ash.
+    particleCount: 7,
     types: [
       { type: 'leaf', weight: 0.6, sizeRange: [3, 5], vxRange: [5, 20], vyRange: [5, 15], rotSpeedRange: [1, 4] },
-      { type: 'ash', weight: 0.4, sizeRange: [2, 4], vxRange: [3, 15], vyRange: [3, 10], rotSpeedRange: [0.5, 2], color: 'rgba(200, 190, 180, 0.4)' },
     ],
   },
 
@@ -1173,13 +1173,6 @@ export const rooftops: ArenaPack = {
       ctx.fillStyle = 'rgba(200, 190, 170, 0.35)';
       ctx.fillRect(-w.size, -w.size * 0.4, w.size * 2, w.size * 0.8);
       ctx.restore();
-    } else {
-      // Ash is a circle — rotation invisible, so draw at world coords
-      // and skip the canvas-state save/translate/rotate/restore.
-      ctx.fillStyle = w.color || 'rgba(200, 190, 180, 0.4)';
-      ctx.beginPath();
-      ctx.arc(w.x, w.y, w.size * 0.5, 0, Math.PI * 2);
-      ctx.fill();
     }
   },
 
