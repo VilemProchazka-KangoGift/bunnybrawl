@@ -1,3 +1,4 @@
+import {drawRoundedSwallow} from '../../../src/engine/rendering/roundedSwallow.ts';
 import {drawWildlife} from '../../../src/engine/rendering/particles.ts';
 export function flightAt(t){
  return Array.from({length:6},(_,i)=>{
@@ -25,19 +26,13 @@ export function drawCue(c,flight,variant,size=1){
  for(const w of flight){
   if(w.type==='butterfly'){drawRoundedButterfly(c,w);continue;}
   if(variant===3)continue;
+  if(variant===1){drawRoundedSwallow(c,w,size);continue;}
   c.save();c.translate(w.x,w.y);c.scale(size,size);
   if(variant===0){drawWildlife(c,[{...w,x:0,y:0}]);c.restore();continue;}
   const flap=Math.sin(w.wingPhase)*3;
   c.fillStyle=w.color;c.beginPath();c.moveTo(-2,1);
-  if(variant===1){
-   c.quadraticCurveTo(-5,1+flap,-8,-3+flap);
-   c.quadraticCurveTo(-3,-4+flap,0,-.7);
-   c.quadraticCurveTo(3,-4+flap,8,-3+flap);
-   c.quadraticCurveTo(6,1+flap,2,1);
-  }else{
    c.lineTo(-9,-3+flap);c.quadraticCurveTo(-4,-2+flap,0,0);
    c.quadraticCurveTo(5,-5+flap,9,-3+flap);c.lineTo(4,2);c.lineTo(2,1);
-  }
   c.lineTo(0,3);c.closePath();c.fill();
   c.beginPath();c.ellipse(1,0,2.7,1.35,0,0,Math.PI*2);c.fill();c.restore();
  }

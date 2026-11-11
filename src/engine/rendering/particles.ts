@@ -1,3 +1,4 @@
+import { drawRoundedSwallow } from './roundedSwallow';
 import { drawInkLeaf } from './leafEffects';
 import { drawBurnCough } from './burnEffects';
 import { drawRespawnEntrance } from './respawnEffects';
@@ -285,7 +286,7 @@ export function drawFireworks(ctx: Ctx2D, particles: Particle[], frameTime: numb
   ctx.globalAlpha = 1;
 }
 
-export function drawWildlife(ctx: Ctx2D, wildlife: WildlifeEntity[]): void {
+export function drawWildlife(ctx: Ctx2D, wildlife: WildlifeEntity[], roundedSwallows = false): void {
   for (const w of wildlife) {
     const cx = w.x;
     const cy = w.y;
@@ -359,6 +360,7 @@ export function drawWildlife(ctx: Ctx2D, wildlife: WildlifeEntity[]): void {
       ctx.ellipse(cx, cy, 2, 3, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
+      if (roundedSwallows) { drawRoundedSwallow(ctx, w); continue; }
       // Bird: simple M-shape silhouette
       ctx.strokeStyle = w.color;
       ctx.lineWidth = 2;
