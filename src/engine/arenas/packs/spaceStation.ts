@@ -1,3 +1,4 @@
+import { drawAmberComet } from '../../rendering/amberComet';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../../constants';
 import { fastSin } from '../../fastMath';
 import {
@@ -768,8 +769,7 @@ export const spaceStation: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    // Both spark + warning are circles — no rotation. Reset globalAlpha at
-    // end since each branch sets it.
+    // Blue sparks retain their glow; amber comets follow their velocity.
     if (w.type === 'spark') {
       ctx.fillStyle = w.color || '#00CCFF';
       ctx.globalAlpha = 1;
@@ -781,11 +781,7 @@ export const spaceStation: ArenaPack = {
       ctx.arc(w.x, w.y, w.size * 2.5, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      ctx.fillStyle = w.color || '#FFAA00';
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.arc(w.x, w.y, w.size, 0, Math.PI * 2);
-      ctx.fill();
+      drawAmberComet(ctx, w);
     }
     ctx.globalAlpha = 1;
   },
