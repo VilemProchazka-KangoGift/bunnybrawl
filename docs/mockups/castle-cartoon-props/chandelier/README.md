@@ -1,6 +1,6 @@
 # Simplified Castle chandelier
 
-The first traced chandelier was ornate at source size but became a cluster of tiny metal parts and five flames at its 120 × 69 game size. The revised fixture keeps one broad iron arc, three clear flames, a plain central hanger, and no fleur-de-lis or repeated fittings. Its subdued 58% runtime opacity is unchanged, so it stays behind players and platform edges in the scene's visual hierarchy.
+The first traced chandelier was ornate at source size but became a cluster of tiny metal parts and five flames at its 120 × 69 game size. The revised fixture keeps one broad iron arc, three clear flames, a plain central hanger, and no fleur-de-lis or repeated fittings. The later [opaque Castle pass](../wall-props-live/README.md) replaces the 58% opacity with full-alpha drawing and a darker, less saturated grade.
 
 | Previous live scene | Simplified live scene | Second worker mode |
 | --- | --- | --- |

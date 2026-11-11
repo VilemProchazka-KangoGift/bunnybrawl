@@ -2,7 +2,7 @@
 
 The [simplified chandelier pass](chandelier/README.md) replaces the busy five-flame trace with a three-flame iron arc in the playable arena. The previous trace remains as a comparison source.
 
-The [Castle wall prop study](armory-study/README.md) compares heraldry, weapons, trophies, and pennants in full-scene images. The later [playable layout](wall-props-live/README.md) uses one each of the simplified shield, sword stand, trophy, crossed swords, and pennant, and mounts the armor suits below the upper gallery. The rejected royal portraits remain removed. Windows are unchanged.
+The [Castle wall prop study](armory-study/README.md) compares heraldry, weapons, trophies, and pennants in full-scene images. The later [playable layout](wall-props-live/README.md) uses one each of the simplified shield, sword stand, trophy, crossed swords, and pennant. The armor suits returned to the upper gallery, set back from the player contact line. The rejected royal portraits remain removed. Windows are unchanged.
 
 The earlier [royal gallery pass](royal-gallery/README.md) removed the misleading freestanding columns and added upper-platform cloth and relief and restrained wall wear. Its portrait images are now a historical comparison, not the current production scene.
 
@@ -12,7 +12,7 @@ The approved quieter Balanced Silver from the [Castle atmosphere gallery](atmosp
 
 The approved Moonlit props use simplified storybook silhouettes and broad light/shadow planes. The guard, sconce, and now-retired edge column were traced to editable [SVG masters](svg/); the chandelier was later redrawn as a simpler SVG. They render as transparent WebP files for the game. A browser probe found that `createImageBitmap` could not decode the SVG Blob in Edge, while the WebP files loaded in both canvas-owning worker modes. Run `node docs/mockups/castle-cartoon-props/rasterize.mjs` with `CASTLE_PROPS_BROWSER` set to a local Chromium or Edge binary to regenerate the runtime files; pass `chandelier` to regenerate only that asset.
 
-The original four traced WebP files totaled 40,972 bytes, including the retained column master; the later chandelier replacement is smaller. The small sconce is inlined by Vite. The guard, sconce and chandelier must decode before the illustrated prop set renders; a missing core image uses the Canvas fallback. The rejected portraits have been removed from the playable arena. Guards and sconces sit behind players; the faded chandelier is drawn on the foreground canvas. The five warm wall torches are replaced by four cool sconces, and sparse Moonlit banners retain their reactive sway. Gameplay geometry and hazard collision are unchanged.
+The original four traced WebP files totaled 40,972 bytes, including the retained column master; the later chandelier replacement is smaller. The small sconce is inlined by Vite. The guard, sconce and chandelier must decode before the illustrated prop set renders; a missing core image uses the Canvas fallback. The rejected portraits have been removed from the playable arena. Guards and sconces sit behind players; the muted, opaque chandelier is drawn on the foreground canvas. The five warm wall torches are replaced by four cool sconces, and sparse Moonlit banners retain their reactive sway. Gameplay geometry and hazard collision are unchanged.
 
 | Default simulation worker | `simWorker=off` |
 | --- | --- |

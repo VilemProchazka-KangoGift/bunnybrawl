@@ -17,7 +17,7 @@ import type { ArenaPack } from '../types';
 import { drawStorybookPlatform } from './castleStationPlatforms';
 import { CASTLE_SCONCE_FLAME_Y, CASTLE_SCONCE_X, drawCastleCartoonBackground, drawCastleCartoonForeground } from './castleCartoonProps';
 import { drawCastleGuardianSpring } from './castleGuardianSpring';
-import { drawCastleArmorMounts, drawCastleWallProps } from './castleWallProps';
+import { castleArmorBounds, drawCastleWallProps } from './castleWallProps';
 
 const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
@@ -195,15 +195,15 @@ registerReactiveKind('castle.banner', {
     const wide = 14;
     const drop = 35;
     ctx.save();
-    // This cloth decorates the stone rather than signaling an active object.
-    ctx.globalAlpha = .62;
+    // Muted opaque cloth reads as scenery without showing the wall through it.
+    ctx.globalAlpha = 1;
     ctx.translate(bx, by);
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.strokeStyle = '#d6d9cd';
+    ctx.strokeStyle = '#8c989e';
     ctx.lineWidth = 2.2;
     ctx.beginPath(); ctx.moveTo(-wide, 0); ctx.lineTo(wide, 0); ctx.stroke();
-    ctx.fillStyle = '#d7bb76';
+    ctx.fillStyle = '#a99a79';
     for (const x of [-wide, wide]) {
       ctx.beginPath(); ctx.ellipse(x, 0, 2, 2, 0, 0, Math.PI * 2); ctx.fill();
     }
@@ -212,20 +212,20 @@ registerReactiveKind('castle.banner', {
     ctx.quadraticCurveTo(wide + 2 + sway * .15, 18, wide - 3 + sway, drop);
     ctx.lineTo(sway, drop + 5); ctx.lineTo(-wide + 3 + sway, drop);
     ctx.quadraticCurveTo(-wide - 2 + sway * .15, 18, -wide + 2, 1);
-    ctx.closePath(); ctx.fillStyle = '#574e85'; ctx.fill();
-    ctx.strokeStyle = '#24273c'; ctx.lineWidth = 1.7; ctx.stroke();
-    ctx.globalAlpha = .32;
-    ctx.fillStyle = '#8581ab';
+    ctx.closePath(); ctx.fillStyle = '#4c4e68'; ctx.fill();
+    ctx.strokeStyle = '#343a4b'; ctx.lineWidth = 1.7; ctx.stroke();
+    ctx.globalAlpha = .5;
+    ctx.fillStyle = '#73758c';
     ctx.beginPath();
     ctx.moveTo(-wide + 4, 4); ctx.lineTo(sway * .2, 5);
     ctx.lineTo(-2 + sway * .7, drop - 4); ctx.lineTo(-wide + 3 + sway, drop - 5);
     ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = .62;
-    ctx.fillStyle = '#d7bb76';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#a99a79';
     ctx.beginPath(); ctx.ellipse(sway * .25, 18, 5, 5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#574e85';
+    ctx.fillStyle = '#4c4e68';
     ctx.beginPath(); ctx.ellipse(2 + sway * .25, 16, 4.5, 5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#d7bb76';
+    ctx.fillStyle = '#a99a79';
     for (const x of [-4, 4]) {
       ctx.beginPath(); ctx.ellipse(x + sway * .7, 28, 1.3, 1.3, 0, 0, Math.PI * 2); ctx.fill();
     }
@@ -556,11 +556,11 @@ export const castle: ArenaPack = {
       ctx.stroke();
     };
 
-    // The fallback uses the same non-playable wall mounts as the illustrated art.
+    // The fallback also keeps the armor on the gallery's rear plane.
     const gallery = arena.platforms.find(platform => platform.y < 300 && platform.width > 700);
     if (gallery) {
-      for (const mount of drawCastleArmorMounts(ctx, gallery)) {
-        drawArmor(mount.x + mount.width / 2, mount.y + 78, 58);
+      for (const armor of castleArmorBounds(gallery)) {
+        drawArmor(armor.x + armor.width / 2, armor.y + armor.height, 58);
       }
     }
 

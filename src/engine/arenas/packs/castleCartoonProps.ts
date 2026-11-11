@@ -1,7 +1,7 @@
 import type { Arena, Ctx2D } from '../../types';
 import { getCastlePropArt } from '../illustratedBackdropAsset';
 import { drawCastleGalleryDecoration, drawCastleWallDetails } from './castleRoyalGallery';
-import { drawCastleArmorMounts } from './castleWallProps';
+import { castleArmorBounds } from './castleWallProps';
 
 type CastleArt = { guard: ImageBitmap; sconce: ImageBitmap; chandelier: ImageBitmap };
 
@@ -29,15 +29,24 @@ export function drawCastleCartoonBackground(c: Ctx2D, arena: Arena): boolean {
   c.save();
   drawCastleWallDetails(c);
   if (upperGallery) drawCastleGalleryDecoration(c, upperGallery);
-  // Passive wall fixtures sit below the contrast of players and playable stone.
-  c.globalAlpha = .65;
+  // Grade opaque art into the wall palette; lowering alpha made it translucent.
+  c.globalAlpha = 1;
+  c.filter = 'saturate(.7) brightness(.86)';
   for (const x of CASTLE_SCONCE_X) c.drawImage(art.sconce, x - 12, groundY - 140, 24, 39);
-  c.globalAlpha = .62;
+  c.filter = 'saturate(.55) brightness(.76)';
   if (upperGallery) {
-    // Shallow mounts make the suits read as wall displays, never footholds.
-    const [left, right] = drawCastleArmorMounts(c, upperGallery);
-    c.drawImage(art.guard, left.x + 7, left.y + 16, 46, 62);
-    mirror(c, art.guard, right.x + 7, right.y + 16, 46, 62);
+    // Armor stands on the rear plane of the gallery top. Its feet and small
+    // shadow end above the player's contact line, so crossing players read in front.
+    const [left, right] = castleArmorBounds(upperGallery);
+    c.drawImage(art.guard, left.x, left.y, left.width, left.height);
+    mirror(c, art.guard, right.x, right.y, right.width, right.height);
+    c.filter = 'none';
+    c.fillStyle = '#46566a';
+    for (const armor of [left, right]) {
+      c.beginPath();
+      c.ellipse(armor.x + armor.width / 2, upperGallery.y - 5, 17, 2, 0, 0, Math.PI * 2);
+      c.fill();
+    }
   }
   c.restore();
   return true;
@@ -48,8 +57,7 @@ export function drawCastleCartoonForeground(c: Ctx2D, _arena: Arena): boolean {
   if (!art) return false;
   // Extend the chain to the middle shelf so the lowered fixture still hangs from it.
   c.save();
-  c.globalAlpha = .58;
-  c.strokeStyle = '#293446';
+  c.strokeStyle = '#354357';
   c.lineWidth = 4;
   c.beginPath();
   c.moveTo(640, 500);
@@ -57,7 +65,7 @@ export function drawCastleCartoonForeground(c: Ctx2D, _arena: Arena): boolean {
   c.stroke();
   c.restore();
   c.save();
-  c.globalAlpha = .58;
+  c.filter = 'saturate(.6) brightness(.78)';
   c.drawImage(art.chandelier, 580, 511, 120, 69);
   c.restore();
   return true;
