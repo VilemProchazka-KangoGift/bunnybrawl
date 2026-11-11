@@ -1,3 +1,4 @@
+import { drawSoftAshWisp } from '../../rendering/softAshWisp';
 import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
@@ -688,10 +689,7 @@ export const hauntedGraveyard: ArenaPack = {
 
   drawWeatherParticle: (ctx, w) => {
     if (w.type === 'ash') {
-      ctx.fillStyle = w.color || 'rgba(100, 80, 120, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(w.x, w.y, w.size, w.size * 0.5, w.rotation, 0, Math.PI * 2);
-      ctx.fill();
+      drawSoftAshWisp(ctx, w, 3);
     } else {
       ctx.fillStyle = 'rgba(80, 60, 40, 0.4)';
       ctx.beginPath();
