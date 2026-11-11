@@ -1,3 +1,10 @@
+function drawOriginal(ctx,w){
+      // Sugar petal
+      ctx.fillStyle = 'rgba(255, 200, 220, 0.5)';
+      ctx.beginPath();
+      ctx.ellipse(w.x, w.y, w.size, w.size * 0.6, w.rotation, 0, Math.PI * 2);
+      ctx.fill();
+}
 const SPRINKLE_COLORS = ['#FF69B4', '#FFD700', '#87CEEB', '#98FB98', '#DDA0DD', '#FF6347'];
 function drawCurl(ctx,w){
       ctx.save();
@@ -25,9 +32,28 @@ export function weatherAt(t){
 export function drawCue(c,weather,variant,theme){
  for(const w of weather){
    if(w.type==='sprinkle'){drawCurl(c,w);continue;}
-   if(variant===0){theme.drawWeatherParticle(c,w);continue;}
+   if(variant===0){drawOriginal(c,w);continue;}
+   if(variant===4){theme.drawWeatherParticle(c,w);continue;}
    if(variant===3)continue;
    c.save();c.translate(w.x,w.y);c.rotate(w.rotation);const r=w.size;
+   if(variant>=4){
+     c.scale(r,r);
+     c.fillStyle=variant===5?'#edb0d4':'#d979a5';
+     c.beginPath();
+     if(variant===5){
+       c.moveTo(-.82,.43);c.quadraticCurveTo(-.95,-.35,-.52,-.46);
+       c.quadraticCurveTo(-.24,-.84,.08,-.57);c.quadraticCurveTo(.68,-.76,.69,-.28);
+       c.quadraticCurveTo(1.03,-.03,.76,.4);c.quadraticCurveTo(.01,.15,-.82,.43);
+     }else{
+       c.moveTo(-.97,.25);c.quadraticCurveTo(-.08,-.89,.55,-.52);
+       c.bezierCurveTo(1.28,-.1,.84,.66,.33,.62);c.quadraticCurveTo(-.45,.55,-.97,.25);
+     }
+     c.closePath();c.fill();
+     c.strokeStyle='#fff0e9';c.lineWidth=.14;c.lineCap='round';c.beginPath();
+     if(variant===5){for(const x of [-.44,0,.45]){c.moveTo(x,-.31);c.lineTo(x*.58,.15);}}
+     else{c.moveTo(.18,-.28);c.quadraticCurveTo(.53,-.36,.65,-.08);}
+     c.stroke();c.restore();continue;
+   }
    c.fillStyle=variant===1?'rgba(249,173,206,.78)':'rgba(237,126,176,.75)';
    c.beginPath();c.moveTo(-r,0);
    if(variant===1){

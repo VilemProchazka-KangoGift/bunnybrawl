@@ -558,11 +558,27 @@ export const candyLand: ArenaPack = {
       ctx.fill();
       ctx.restore();
     } else {
-      // Sugar petal
-      ctx.fillStyle = 'rgba(255, 200, 220, 0.5)';
+      ctx.save();
+      ctx.translate(w.x, w.y);
+      ctx.rotate(w.rotation);
+      ctx.scale(w.size, w.size);
+      ctx.fillStyle = '#ee8fb6';
       ctx.beginPath();
-      ctx.ellipse(w.x, w.y, w.size, w.size * 0.6, w.rotation, 0, Math.PI * 2);
+      ctx.moveTo(0, .79);
+      ctx.bezierCurveTo(-.17, .46, -1.18, -.06, -.78, -.59);
+      ctx.quadraticCurveTo(-.39, -1, 0, -.45);
+      ctx.quadraticCurveTo(.39, -1, .78, -.59);
+      ctx.bezierCurveTo(1.18, -.06, .17, .46, 0, .79);
+      ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = '#fff0e9';
+      ctx.lineWidth = .14;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-.55, -.29);
+      ctx.quadraticCurveTo(-.55, -.52, -.36, -.53);
+      ctx.stroke();
+      ctx.restore();
     }
   },
 
