@@ -5,9 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const names = ['shield-spears', 'sword-mace-rack', 'trophy-shelf', 'tournament-pennant', 'trophy-plaque', 'trophy-niche'];
-const sources = Object.fromEntries(await Promise.all(names.map(async name => [
-  name, (await readFile(join(directory, 'sources', `${name}.png`))).toString('base64'),
-])));
+const simpleNames = ['simple-shield', 'simple-crossed-swords', 'simple-trophy', 'simple-weapon-stand'];
+const sources = Object.fromEntries(await Promise.all([
+  ...names.map(async name => [name, `data:image/png;base64,${(await readFile(join(directory, 'sources', `${name}.png`))).toString('base64')}`]),
+  ...simpleNames.map(async name => [name, `data:image/svg+xml;base64,${(await readFile(join(directory, 'sources', `${name}.svg`))).toString('base64')}`]),
+]));
 const baseline = (await readFile(join(directory, 'baseline-no-portraits.png'))).toString('base64');
 const browser = await chromium.launch(process.env.CASTLE_PROPS_BROWSER
   ? { executablePath: process.env.CASTLE_PROPS_BROWSER }
@@ -16,13 +18,13 @@ const browser = await chromium.launch(process.env.CASTLE_PROPS_BROWSER
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
   const renders = await page.evaluate(async ({ sources, baseline }) => {
-    const decode = async base64 => {
+    const decode = async source => {
       const image = new Image();
-      image.src = `data:image/png;base64,${base64}`;
+      image.src = source;
       await image.decode();
       return image;
     };
-    const base = await decode(baseline);
+    const base = await decode(`data:image/png;base64,${baseline}`);
     const art = Object.fromEntries(await Promise.all(Object.entries(sources).map(async ([name, bytes]) => [name, await decode(bytes)])));
     const canvas = document.createElement('canvas');
     canvas.width = 1280;
@@ -34,8 +36,8 @@ try {
       ctx.save();
       ctx.translate(cx, bottom - height);
       if (flip) ctx.scale(-1, 1);
-      ctx.globalAlpha = .91;
-      ctx.filter = name === 'sword-mace-rack'
+      ctx.globalAlpha = name.startsWith('simple-') ? 1 : .91;
+      ctx.filter = name.startsWith('simple-') ? 'none' : name === 'sword-mace-rack'
         ? 'saturate(.75) brightness(.94) contrast(1.04)'
         : 'saturate(.68) brightness(.82) contrast(1.04)';
       ctx.drawImage(image, -width / 2, 0, width, height);
@@ -51,6 +53,12 @@ try {
       'g-trophy-niche': [['trophy-niche', 328, 565, 104], ['trophy-niche', 952, 565, 104, true]],
       'h-armory-pennant': [['shield-spears', 328, 576, 110], ['tournament-pennant', 952, 565, 116, true]],
       'i-plaque-armory': [['trophy-plaque', 328, 565, 104], ['sword-mace-rack', 952, 574, 106, true]],
+      'j-simple-shields': [['simple-shield', 328, 565, 94], ['simple-shield', 952, 565, 94]],
+      'k-simple-stands': [['simple-weapon-stand', 328, 565, 96], ['simple-weapon-stand', 952, 565, 96]],
+      'l-simple-trophies': [['simple-trophy', 328, 565, 94], ['simple-trophy', 952, 565, 94]],
+      'm-shield-pennant': [['simple-shield', 328, 565, 94], ['tournament-pennant', 952, 565, 116, true]],
+      'n-stand-trophy': [['simple-weapon-stand', 328, 565, 96], ['simple-trophy', 952, 565, 94]],
+      'o-swords-pennant': [['simple-crossed-swords', 328, 565, 96], ['tournament-pennant', 952, 565, 116, true]],
     };
     const output = {};
     for (const [name, placements] of Object.entries(variants)) {
