@@ -1,3 +1,4 @@
+import {drawCreamCurledPetal} from '../../../src/engine/rendering/creamCurledPetal.ts';
 import {drawWeather} from '../../../src/engine/rendering/particles.ts';
 export function weatherAt(t){
  return Array.from({length:35},(_,i)=>{
@@ -25,13 +26,10 @@ function drawNotchedPetal(c,w,lead=0) {
 
 export function drawCue(c,weather,variant,theme){
  for(const w of weather){
-  if(w.type!=='petal'||variant===0){drawWeather(c,[w],theme);continue;}
+  if(w.type!=='petal'){drawWeather(c,[w],theme);continue;}
+  if(variant===0){c.fillStyle='rgba(255, 180, 200, 0.35)';c.beginPath();c.ellipse(w.x,w.y,w.size,w.size*.6,w.rotation,0,Math.PI*2);c.fill();continue;}
   if(variant===3)continue;
   if(variant===1){drawNotchedPetal(c,w);continue;}
-  c.save();c.translate(w.x,w.y);c.rotate(w.rotation);const r=w.size;
-  c.fillStyle='rgba(251,226,180,.83)';c.beginPath();c.moveTo(-r,0);
-  c.bezierCurveTo(-r*.4,-r*.85,r*.57,-r*.67,r,.08);c.quadraticCurveTo(r*.22,r*.73,-r,0);c.fill();
-  c.fillStyle='rgba(195,130,106,.66)';c.beginPath();c.moveTo(-r*.66,0);c.quadraticCurveTo(r*.25,-r*.12,r,.08);c.quadraticCurveTo(r*.22,r*.73,-r*.66,0);c.fill();
-  c.restore();
+  drawCreamCurledPetal(c,w);
  }
 }

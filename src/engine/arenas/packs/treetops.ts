@@ -1,3 +1,5 @@
+import { drawCreamCurledPetal } from '../../rendering/creamCurledPetal';
+import { drawInkLeaf } from '../../rendering/leafEffects';
 import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
@@ -594,6 +596,11 @@ export const treetops: ArenaPack = {
     ctx.fillStyle = fogGrd;
     ctx.fillRect(0, 620, 1280, 100);
     ctx.restore();
+  },
+
+  drawWeatherParticle: (ctx, particle) => {
+    if (particle.type === 'petal') drawCreamCurledPetal(ctx, particle);
+    else if (particle.type === 'leaf') drawInkLeaf(ctx, particle);
   },
 
   drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
