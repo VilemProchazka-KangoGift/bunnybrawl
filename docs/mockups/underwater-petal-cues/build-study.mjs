@@ -1,0 +1,1 @@
+import {build} from 'vite';await build({configFile:false,base:'/bunnybrawl/',define:{__BUILD_TIME__:JSON.stringify('study')},build:{outDir:'test-results/underwater-petal-static',emptyOutDir:true,rolldownOptions:{input:'docs/mockups/underwater-petal-cues/index.html'}}});
