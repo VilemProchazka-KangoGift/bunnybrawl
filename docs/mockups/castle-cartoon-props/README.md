@@ -2,7 +2,7 @@
 
 The [simplified chandelier pass](chandelier/README.md) replaces the busy five-flame trace with a three-flame iron arc in the playable arena. The previous trace remains as a comparison source.
 
-The latest [Castle wall prop study](armory-study/README.md) compares shield-and-spear displays, weapon racks, trophy shelves, pennants and an asymmetric armory mix in matched full-scene images. The rejected royal portraits are removed from the playable Castle scene; the alternatives remain mockups pending selection. Windows are unchanged.
+The [Castle wall prop study](armory-study/README.md) compares heraldry, weapons, trophies, and pennants in full-scene images. The later [playable layout](wall-props-live/README.md) uses one each of the simplified shield, sword stand, trophy, crossed swords, and pennant, and mounts the armor suits below the upper gallery. The rejected royal portraits remain removed. Windows are unchanged.
 
 The earlier [royal gallery pass](royal-gallery/README.md) removed the misleading freestanding columns and added upper-platform cloth and relief and restrained wall wear. Its portrait images are now a historical comparison, not the current production scene.
 

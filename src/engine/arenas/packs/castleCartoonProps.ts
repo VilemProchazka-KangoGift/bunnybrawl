@@ -1,6 +1,7 @@
 import type { Arena, Ctx2D } from '../../types';
 import { getCastlePropArt } from '../illustratedBackdropAsset';
 import { drawCastleGalleryDecoration, drawCastleWallDetails } from './castleRoyalGallery';
+import { drawCastleArmorMounts } from './castleWallProps';
 
 type CastleArt = { guard: ImageBitmap; sconce: ImageBitmap; chandelier: ImageBitmap };
 
@@ -33,9 +34,10 @@ export function drawCastleCartoonBackground(c: Ctx2D, arena: Arena): boolean {
   for (const x of CASTLE_SCONCE_X) c.drawImage(art.sconce, x - 12, groundY - 140, 24, 39);
   c.globalAlpha = .62;
   if (upperGallery) {
-    // Gallery sentries mark the long upper landing without crowding its center spawn.
-    c.drawImage(art.guard, upperGallery.x + 62, upperGallery.y - 72, 52, 72);
-    mirror(c, art.guard, upperGallery.x + upperGallery.width - 114, upperGallery.y - 72, 52, 72);
+    // Shallow mounts make the suits read as wall displays, never footholds.
+    const [left, right] = drawCastleArmorMounts(c, upperGallery);
+    c.drawImage(art.guard, left.x + 7, left.y + 16, 46, 62);
+    mirror(c, art.guard, right.x + 7, right.y + 16, 46, 62);
   }
   c.restore();
   return true;

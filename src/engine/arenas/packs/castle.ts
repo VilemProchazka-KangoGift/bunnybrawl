@@ -17,6 +17,7 @@ import type { ArenaPack } from '../types';
 import { drawStorybookPlatform } from './castleStationPlatforms';
 import { CASTLE_SCONCE_FLAME_Y, CASTLE_SCONCE_X, drawCastleCartoonBackground, drawCastleCartoonForeground } from './castleCartoonProps';
 import { drawCastleGuardianSpring } from './castleGuardianSpring';
+import { drawCastleArmorMounts, drawCastleWallProps } from './castleWallProps';
 
 const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
@@ -489,7 +490,10 @@ export const castle: ArenaPack = {
   },
 
   drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => {
-    if (drawCastleCartoonBackground(ctx, arena)) return;
+    if (drawCastleCartoonBackground(ctx, arena)) {
+      drawCastleWallProps(ctx);
+      return;
+    }
     const ground = arena.platforms[0];
     const y = ground.y;
 
@@ -552,8 +556,15 @@ export const castle: ArenaPack = {
       ctx.stroke();
     };
 
-    drawArmor(250, y, 45);
-    drawArmor(1050, y, 42);
+    // The fallback uses the same non-playable wall mounts as the illustrated art.
+    const gallery = arena.platforms.find(platform => platform.y < 300 && platform.width > 700);
+    if (gallery) {
+      for (const mount of drawCastleArmorMounts(ctx, gallery)) {
+        drawArmor(mount.x + mount.width / 2, mount.y + 78, 58);
+      }
+    }
+
+    drawCastleWallProps(ctx);
 
     // (Pillars at x=430, 630, 820 are platforms — they're rendered by drawPlatform
     // with the same 3D castle treatment as the rest of the level. No 2D overlay

@@ -1,5 +1,7 @@
 # Castle wall prop study
 
+**Current implementation:** the [playable Castle layout](../wall-props-live/README.md) uses one each of the five simplified prop types. The images below preserve the earlier selection process.
+
 The royal portraits were rejected and removed from the Castle draw and preload paths. This study tests alternatives in the two empty lower wall bays. A–I use the original 1280 × 720 production-renderer screenshot; J–O use the later [subdued playable capture](faded-live-default.png) after the Castle decorations were faded. Each group shares its own background and camera. The wall props are **mockup overlays**, not implemented game art. Windows and collision are unchanged.
 
 | Direction | Full scene | Native-size detail | What it tests |
@@ -38,4 +40,4 @@ After seeing F–I in the scene, the plaque and rack still had too much material
 
 ## Background contrast pass
 
-The simplified props initially looked like foreground objects because their ink and colors were as strong as the playable stone and characters. J–O now composite at 58% opacity over a fresh production capture. The existing Castle guard art moved from 87% to 62% opacity, the sconce art from 80% to 65%, the chandelier to 58%, and the hanging banners to 62%; their interior shading is attenuated too. The [default worker](faded-live-default.png) and [`simWorker=off`](faded-live-simWorker-off.png) captures show the actual arena after this change. Keep the glassy moon backdrop, landing edges, players, spring and thorns at their existing contrast: those surfaces and objects carry gameplay information. The wall prop mockups remain unimplemented until one is chosen.
+The simplified props initially looked like foreground objects because their ink and colors were as strong as the playable stone and characters. J–O composite at 58% opacity over a production capture from that stage. The existing Castle guard art moved from 87% to 62% opacity, the sconce art from 80% to 65%, the chandelier to 58%, and the hanging banners to 62%; their interior shading is attenuated too. The [default worker](faded-live-default.png) and [`simWorker=off`](faded-live-simWorker-off.png) captures show that earlier arena state. Keep the glassy moon backdrop, landing edges, players, spring and thorns at their existing contrast: those surfaces and objects carry gameplay information. The later playable layout draws all five simplified item types at 54% opacity on the cached background.

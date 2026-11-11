@@ -3,11 +3,33 @@ import { registerBuiltinArenas } from '../../builtin';
 import { getArenaPack } from '../../registry';
 import { getArena } from '../../operations';
 import { hasReactiveKind, getReactiveKind } from '../../../gameLoop/cosmetics';
+import { CASTLE_WALL_PROPS, castleArmorMounts } from '../castleWallProps';
 
 vi.mock('../../../perfFlags', () => ({ getSlowDevice: () => false }));
 
 beforeAll(() => {
   registerBuiltinArenas();
+});
+
+describe('castle — static wall display layout', () => {
+  it('keeps every new wall item and both armor mounts clear of playable platforms', () => {
+    const arena = getArena('castle');
+    const gallery = arena.platforms.find(platform => platform.y < 300 && platform.width > 700);
+    expect(gallery).toBeDefined();
+    const props = Object.values(CASTLE_WALL_PROPS);
+    expect(props).toHaveLength(5);
+    const decorations = [...props, ...castleArmorMounts(gallery!)];
+    for (const decoration of decorations) {
+      for (const platform of arena.platforms) {
+        const gap = 5;
+        const separated = decoration.x >= platform.x + platform.width + gap
+          || decoration.x + decoration.width + gap <= platform.x
+          || decoration.y >= platform.y + platform.height + gap
+          || decoration.y + decoration.height + gap <= platform.y;
+        expect(separated, `decoration at ${decoration.x},${decoration.y} overlaps platform at ${platform.x},${platform.y}`).toBe(true);
+      }
+    }
+  });
 });
 
 describe('castle — buildReactiveDecorations', () => {
