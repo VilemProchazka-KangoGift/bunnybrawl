@@ -1,3 +1,4 @@
+import {drawSoftAshWisp} from '../../../src/engine/rendering/softAshWisp.ts';
 
 function drawDimCinder(c,w) {
   c.save();c.translate(w.x,w.y);const r=w.size;
@@ -29,15 +30,13 @@ export function weatherAt(t){
 export function drawCue(c,weather,variant,theme){
   for(const w of weather){
     if(w.type==='ember'){drawDimCinder(c,w);continue;}
-    if(variant===0){theme.drawWeatherParticle(c,w);continue;}
+    if(variant===0){c.fillStyle=w.color||'rgba(120,100,90,.5)';c.beginPath();c.ellipse(w.x,w.y,w.size,w.size*.4,w.rotation,0,Math.PI*2);c.fill();continue;}
+    if(variant===2){drawSoftAshWisp(c,w);continue;}
     if(variant===3)continue;
     c.save();c.translate(w.x,w.y);c.rotate(w.rotation);const r=w.size;
     if(variant===1){
       c.fillStyle='rgba(142,118,112,.72)';c.beginPath();c.moveTo(-r,-r*.13);c.lineTo(-r*.22,-r*.53);c.lineTo(r*.72,-r*.2);c.lineTo(r*.92,r*.17);c.lineTo(r*.13,r*.41);c.lineTo(-r*.48,r*.26);c.closePath();c.fill();
       c.strokeStyle='rgba(203,176,158,.5)';c.lineWidth=.45;c.beginPath();c.moveTo(-r*.65,0);c.lineTo(-r*.2,-r*.22);c.lineTo(r*.44,-r*.07);c.stroke();
-    }else{
-      c.fillStyle='rgba(160,132,121,.43)';c.beginPath();c.ellipse(-r*.18,0,r*.76,r*.46,0,0,Math.PI*2);c.fill();
-      c.fillStyle='rgba(191,164,150,.37)';c.beginPath();c.ellipse(r*.43,-r*.19,r*.57,r*.31,-.22,0,Math.PI*2);c.fill();
     }c.restore();
   }
 }

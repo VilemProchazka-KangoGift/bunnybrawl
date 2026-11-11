@@ -17,7 +17,7 @@ const details=[...document.querySelectorAll('.detail')];
 let time=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,last=0;
 function render(){
   state.timeElapsed=time;state.dayPhase=Number($('lighting').value);
-  state.weather=weatherAt(time);
+  state.weather=weatherAt(time).map(w=>w.type==='ash'?{...w,size:w.size*Number($('ash-size').value)}:w);
   state.players.forEach((p,i)=>{p.y=(i?540:430)-Math.sin(time*1.5+i)*65;});
   panels.forEach((p,i)=>{p.renderer.renderFrame(state,sceneArena,[]);const c=p.canvas.getContext('2d');c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,1280,720);c.drawImage(p.bg,0,0,1280,720);
     c.globalAlpha=p.nightOpacity;c.drawImage(p.bgNight,0,0,1280,720);c.globalAlpha=1;c.drawImage(p.fg,0,0,1280,720);
@@ -34,6 +34,7 @@ function render(){
   });$('time').value=time;$('clock').textContent=time.toFixed(2)+'s';
 }
 $('lighting').onchange=render;
+$('ash-size').onchange=render;
 $('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause':'Play';};
 $('replay').onclick=()=>{time=0;playing=true;$('play').textContent='Pause';render();};
 $('time').oninput=()=>{playing=false;$('play').textContent='Play';time=Number($('time').value);render();};

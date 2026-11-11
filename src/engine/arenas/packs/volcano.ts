@@ -1,3 +1,4 @@
+import { drawSoftAshWisp } from '../../rendering/softAshWisp';
 import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
@@ -648,11 +649,7 @@ export const volcano: ArenaPack = {
       ctx.fill();
       ctx.globalAlpha = 1;
     } else {
-      // Ash — asymmetric ellipse
-      ctx.fillStyle = w.color || 'rgba(120, 100, 90, 0.5)';
-      ctx.beginPath();
-      ctx.ellipse(w.x, w.y, w.size, w.size * 0.4, w.rotation, 0, Math.PI * 2);
-      ctx.fill();
+      drawSoftAshWisp(ctx, w, 3);
     }
   },
 
