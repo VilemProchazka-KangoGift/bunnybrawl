@@ -18,7 +18,8 @@ export function weatherAt(t){
 export function drawCue(c,weather,variant,theme){
  for(const w of weather){
   if(w.type==='ash'){drawSoftAshWisp(c,w,3);continue;}
-  if(variant===0){theme.drawWeatherParticle(c,w);continue;}
+  if(variant===0){c.fillStyle='rgba(80,60,40,.4)';c.beginPath();c.ellipse(w.x,w.y,w.size,w.size*.35,w.rotation,0,Math.PI*2);c.fill();continue;}
+  if(variant===2){theme.drawWeatherParticle(c,w);continue;}
   if(variant===3)continue;
   c.save();c.translate(w.x,w.y);c.rotate(w.rotation);const r=w.size;
   c.fillStyle=variant===1?'rgba(151,111,78,.78)':'rgba(171,102,73,.75)';

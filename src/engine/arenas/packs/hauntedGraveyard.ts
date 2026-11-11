@@ -693,10 +693,24 @@ export const hauntedGraveyard: ArenaPack = {
       ctx.ellipse(w.x, w.y, w.size, w.size * 0.5, w.rotation, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      ctx.fillStyle = 'rgba(80, 60, 40, 0.4)';
+      ctx.save();
+      ctx.translate(w.x, w.y);
+      ctx.rotate(w.rotation);
+      const r = w.size;
+      ctx.fillStyle = 'rgba(171,102,73,.75)';
       ctx.beginPath();
-      ctx.ellipse(w.x, w.y, w.size, w.size * 0.35, w.rotation, 0, Math.PI * 2);
+      ctx.moveTo(-r, 0);
+      ctx.bezierCurveTo(-r * .3, -r * .87, r * .73, -r * .67, r, .03);
+      ctx.quadraticCurveTo(r * .37, r * .62, -r, 0);
+      ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = 'rgba(224,173,118,.74)';
+      ctx.lineWidth = r * .13;
+      ctx.beginPath();
+      ctx.moveTo(-r * .83, 0);
+      ctx.quadraticCurveTo(0, -r * .18, r * .79, 0);
+      ctx.stroke();
+      ctx.restore();
     }
   },
 
